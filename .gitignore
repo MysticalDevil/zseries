@@ -4,3 +4,4 @@ zig-out/
 .ztotp/
 .tmp-smoke*/
 .env
+.rumdl_cache/
