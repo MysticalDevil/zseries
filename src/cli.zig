@@ -169,7 +169,17 @@ fn runAdd(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Envi
 
 fn printEntries(entries: []const model.Entry) void {
     for (entries) |entry| {
-        std.debug.print("{s}\t{s}\t{s}\t{s}\n", .{ entry.id, entry.issuer, entry.account_name, entry.algorithm.asString() });
+        std.debug.print(
+            "{s}\t{s}\t{s}\t{s}\t{s}{s}\n",
+            .{
+                entry.id,
+                entry.issuer,
+                entry.account_name,
+                entry.kind.asString(),
+                entry.algorithm.asString(),
+                if (entry.isReadonly()) "\treadonly" else "",
+            },
+        );
     }
 }
 
@@ -272,6 +282,10 @@ fn runCode(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
 
     const query = if (argValue(args, "--id")) |id| id else if (args.len > 0) args[0] else return error.InvalidArgs;
     const entry = resolveEntry(state.vault.payload.entries, query) orelse return error.EntryNotFound;
+    if (entry.kind != .totp) {
+        std.debug.print("Entry '{s}' is readonly: kind '{s}' is stored but code generation is not supported.\n", .{ entry.id, entry.kind.asString() });
+        return error.InvalidArgs;
+    }
     const code = try totp.generate(allocator, entry, nowTimestamp(io));
     std.debug.print("{s}\t{s}\t{s}\t{s}\t{d}s\n", .{ entry.id, entry.issuer, entry.account_name, code.code[8 - code.len ..], code.remaining_seconds });
 }
@@ -300,6 +314,10 @@ fn runUpdate(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     try entries.appendSlice(allocator, state.vault.payload.entries);
 
     var entry = entries.items[idx];
+    if (entry.isReadonly()) {
+        std.debug.print("Entry '{s}' is readonly and cannot be updated.\n", .{entry.id});
+        return error.InvalidArgs;
+    }
     if (argValue(args, "--issuer")) |value| entry.issuer = try allocator.dupe(u8, value);
     if (argValue(args, "--account")) |value| entry.account_name = try allocator.dupe(u8, value);
     if (argValue(args, "--secret")) |value| entry.secret = try allocator.dupe(u8, value);
@@ -400,6 +418,22 @@ fn runImport(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
         try importers.third_party.aegis_encrypted(allocator, bytes, state.password, nowTimestamp(io))
     else if (std.mem.eql(u8, format, "authy"))
         try importers.third_party.authy_backup(allocator, bytes, state.password, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "2fas"))
+        try importers.third_party.twofas_plain(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "2fas-encrypted"))
+        try importers.third_party.twofas_encrypted(allocator, bytes, state.password, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "andotp"))
+        try importers.third_party.andotp_plain(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "andotp-encrypted"))
+        try importers.third_party.andotp_encrypted(allocator, bytes, state.password, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "andotp-encrypted-old"))
+        try importers.third_party.andotp_encrypted_old(allocator, bytes, state.password, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "bitwarden"))
+        try importers.third_party.bitwarden(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "proton-authenticator"))
+        try importers.third_party.proton_authenticator(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "ente-auth"))
+        try importers.third_party.ente_auth(allocator, bytes, nowTimestamp(io))
     else
         return error.InvalidArgs;
 
@@ -408,5 +442,12 @@ fn runImport(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     try entries.appendSlice(allocator, state.vault.payload.entries);
     try entries.appendSlice(allocator, imported);
     try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
-    std.debug.print("Imported {d} entries from {s}\n", .{ imported.len, path });
+    var readonly_count: usize = 0;
+    for (imported) |entry| {
+        if (entry.isReadonly()) readonly_count += 1;
+    }
+    std.debug.print(
+        "Imported {d} entries from {s} ({d} totp, {d} readonly)\n",
+        .{ imported.len, path, imported.len - readonly_count, readonly_count },
+    );
 }

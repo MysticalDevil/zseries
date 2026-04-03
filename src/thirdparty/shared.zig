@@ -1,5 +1,7 @@
 const std = @import("std");
 
+const Aead = std.crypto.aead.aes_gcm.Aes256Gcm;
+
 pub fn dup(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
     return try allocator.dupe(u8, value);
 }
@@ -121,4 +123,34 @@ pub fn aes256CbcDecryptAlloc(allocator: std.mem.Allocator, ciphertext: []const u
     const result = try allocator.dupe(u8, unpadded);
     allocator.free(out);
     return result;
+}
+
+pub fn pbkdf2Sha1(password: []const u8, salt: []const u8, iterations: u32) [32]u8 {
+    var key: [32]u8 = undefined;
+    std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.HmacSha1) catch unreachable;
+    return key;
+}
+
+pub fn pbkdf2Sha256(password: []const u8, salt: []const u8, iterations: u32) [32]u8 {
+    var key: [32]u8 = undefined;
+    std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.sha2.HmacSha256) catch unreachable;
+    return key;
+}
+
+pub fn sha256Bytes(input: []const u8) [32]u8 {
+    var out: [32]u8 = undefined;
+    std.crypto.hash.sha2.Sha256.hash(input, &out, .{});
+    return out;
+}
+
+pub fn aes256GcmDecryptAlloc(allocator: std.mem.Allocator, ciphertext: []const u8, nonce_bytes: []const u8, tag_bytes: []const u8, key: [32]u8) ![]u8 {
+    if (nonce_bytes.len != Aead.nonce_length or tag_bytes.len != Aead.tag_length) return error.InvalidCiphertext;
+    var nonce: [Aead.nonce_length]u8 = undefined;
+    @memcpy(&nonce, nonce_bytes);
+    var tag: [Aead.tag_length]u8 = undefined;
+    @memcpy(&tag, tag_bytes);
+    const plaintext = try allocator.alloc(u8, ciphertext.len);
+    errdefer allocator.free(plaintext);
+    try Aead.decrypt(plaintext, ciphertext, tag, "", nonce, key);
+    return plaintext;
 }

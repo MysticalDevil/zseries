@@ -2,6 +2,13 @@ const std = @import("std");
 const model = @import("model.zig");
 const aegis = @import("thirdparty/aegis.zig");
 const authy = @import("thirdparty/authy.zig");
+const otpauth_parser = @import("thirdparty/otpauth.zig");
+const normalize = @import("thirdparty/normalize.zig");
+const twofas = @import("thirdparty/twofas.zig");
+const andotp = @import("thirdparty/andotp.zig");
+const bitwarden_mod = @import("thirdparty/bitwarden.zig");
+const proton_mod = @import("thirdparty/proton_authenticator.zig");
+const ente_mod = @import("thirdparty/ente_auth.zig");
 
 fn dup(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
     return try allocator.dupe(u8, value);
@@ -66,67 +73,41 @@ pub fn csv(allocator: std.mem.Allocator, bytes: []const u8) ![]const model.Entry
             if (tag.len == 0) continue;
             try tags_list.append(allocator, try trimDup(allocator, tag));
         }
-        try entries.append(allocator, .{
-            .id = try dup(allocator, fields[0]),
-            .issuer = try dup(allocator, fields[1]),
-            .account_name = try dup(allocator, fields[2]),
-            .secret = try dup(allocator, fields[3]),
-            .digits = try std.fmt.parseInt(u8, fields[4], 10),
-            .period = try std.fmt.parseInt(u32, fields[5], 10),
-            .algorithm = model.Algorithm.fromString(fields[6]) orelse return error.InvalidAlgorithm,
-            .tags = try tags_list.toOwnedSlice(allocator),
-            .note = if (fields[8].len == 0) null else try dup(allocator, fields[8]),
-            .created_at = try std.fmt.parseInt(i64, fields[9], 10),
-            .updated_at = try std.fmt.parseInt(i64, fields[10], 10),
-        });
+        if (fields.len >= 15) {
+            try entries.append(allocator, .{
+                .id = try dup(allocator, fields[0]),
+                .issuer = try dup(allocator, fields[1]),
+                .account_name = try dup(allocator, fields[2]),
+                .secret = try dup(allocator, fields[3]),
+                .kind = model.EntryKind.fromString(fields[4]) orelse .totp,
+                .digits = try std.fmt.parseInt(u8, fields[5], 10),
+                .period = try std.fmt.parseInt(u32, fields[6], 10),
+                .counter = if (fields[7].len == 0) null else try std.fmt.parseInt(u64, fields[7], 10),
+                .algorithm = model.Algorithm.fromString(fields[8]) orelse return error.InvalidAlgorithm,
+                .tags = try tags_list.toOwnedSlice(allocator),
+                .note = if (fields[10].len == 0) null else try dup(allocator, fields[10]),
+                .readonly_reason = if (fields[11].len == 0) null else try dup(allocator, fields[11]),
+                .source_format = if (fields[12].len == 0) null else try dup(allocator, fields[12]),
+                .created_at = try std.fmt.parseInt(i64, fields[13], 10),
+                .updated_at = try std.fmt.parseInt(i64, fields[14], 10),
+            });
+        } else {
+            try entries.append(allocator, .{
+                .id = try dup(allocator, fields[0]),
+                .issuer = try dup(allocator, fields[1]),
+                .account_name = try dup(allocator, fields[2]),
+                .secret = try dup(allocator, fields[3]),
+                .digits = try std.fmt.parseInt(u8, fields[4], 10),
+                .period = try std.fmt.parseInt(u32, fields[5], 10),
+                .algorithm = model.Algorithm.fromString(fields[6]) orelse return error.InvalidAlgorithm,
+                .tags = try tags_list.toOwnedSlice(allocator),
+                .note = if (fields[8].len == 0) null else try dup(allocator, fields[8]),
+                .created_at = try std.fmt.parseInt(i64, fields[9], 10),
+                .updated_at = try std.fmt.parseInt(i64, fields[10], 10),
+            });
+        }
     }
     return entries.toOwnedSlice(allocator);
-}
-
-fn decodeUriComponentAlloc(allocator: std.mem.Allocator, component: std.Uri.Component) ![]const u8 {
-    return try component.toRawMaybeAlloc(allocator);
-}
-
-fn queryValue(query: []const u8, key: []const u8) ?[]const u8 {
-    var iter = std.mem.splitScalar(u8, query, '&');
-    while (iter.next()) |part| {
-        var pair_iter = std.mem.splitScalar(u8, part, '=');
-        const current_key = pair_iter.next() orelse continue;
-        const current_value = pair_iter.next() orelse "";
-        if (std.mem.eql(u8, current_key, key)) return current_value;
-    }
-    return null;
-}
-
-fn parseOtpAuthUri(allocator: std.mem.Allocator, line: []const u8, now: i64, id_hint: usize) !model.Entry {
-    const uri = try std.Uri.parse(line);
-    if (!std.ascii.eqlIgnoreCase(uri.scheme, "otpauth")) return error.InvalidOtpAuth;
-    const host = try uri.getHostAlloc(allocator);
-    if (!std.ascii.eqlIgnoreCase(host.bytes, "totp")) return error.UnsupportedOtpType;
-    const raw_path = try decodeUriComponentAlloc(allocator, uri.path);
-    defer allocator.free(raw_path);
-    const label = std.mem.trim(u8, raw_path, "/");
-    const query_component = uri.query orelse return error.MissingSecret;
-    const query = try decodeUriComponentAlloc(allocator, query_component);
-    defer allocator.free(query);
-    const secret_value = queryValue(query, "secret") orelse return error.MissingSecret;
-    var issuer = queryValue(query, "issuer") orelse "";
-    var account = label;
-    if (std.mem.indexOfScalar(u8, label, ':')) |idx| {
-        issuer = std.mem.trim(u8, label[0..idx], " ");
-        account = std.mem.trim(u8, label[idx + 1 ..], " ");
-    }
-    return .{
-        .id = try std.fmt.allocPrint(allocator, "import-{d}", .{id_hint}),
-        .issuer = try dup(allocator, issuer),
-        .account_name = try dup(allocator, account),
-        .secret = try dup(allocator, secret_value),
-        .digits = if (queryValue(query, "digits")) |value| try std.fmt.parseInt(u8, value, 10) else 6,
-        .period = if (queryValue(query, "period")) |value| try std.fmt.parseInt(u32, value, 10) else 30,
-        .algorithm = if (queryValue(query, "algorithm")) |value| model.Algorithm.fromString(value) orelse .sha1 else .sha1,
-        .created_at = now,
-        .updated_at = now,
-    };
 }
 
 pub fn otpauth(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]const model.Entry {
@@ -137,13 +118,9 @@ pub fn otpauth(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]con
     while (lines.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, " \t\r\n");
         if (line.len == 0) continue;
-        const entry = parseOtpAuthUri(allocator, line, now, index) catch |err| switch (err) {
-            error.UnsupportedOtpType => {
-                index += 1;
-                continue;
-            },
-            else => return err,
-        };
+        const parsed = try otpauth_parser.parseUri(allocator, line);
+        defer parsed.deinit(allocator);
+        const entry = try normalize.entryAlloc(allocator, parsed.input, now, index);
         try entries.append(allocator, entry);
         index += 1;
     }
@@ -154,6 +131,14 @@ pub const third_party = struct {
     pub const aegis_plain = aegis.importPlain;
     pub const aegis_encrypted = aegis.importEncrypted;
     pub const authy_backup = authy.importBackup;
+    pub const twofas_plain = twofas.importPlain;
+    pub const twofas_encrypted = twofas.importEncrypted;
+    pub const andotp_plain = andotp.importPlain;
+    pub const andotp_encrypted = andotp.importEncrypted;
+    pub const andotp_encrypted_old = andotp.importEncryptedOld;
+    pub const bitwarden = bitwarden_mod.importAlloc;
+    pub const proton_authenticator = proton_mod.importAlloc;
+    pub const ente_auth = ente_mod.importAlloc;
 };
 
 fn readFixtureAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
@@ -165,8 +150,11 @@ test "imports supported otpauth entries from public sample" {
     const bytes = try readFixtureAlloc(testing.allocator, "testdata/otpauth_plain.txt");
     defer testing.allocator.free(bytes);
     const entries = try otpauth(testing.allocator, bytes, 0);
-    try testing.expectEqual(@as(usize, 3), entries.len);
+    try testing.expectEqual(@as(usize, 7), entries.len);
     try testing.expectEqualStrings("Deno", entries[0].issuer);
     try testing.expectEqual(@as(u8, 7), entries[1].digits);
     try testing.expectEqual(@as(u32, 50), entries[2].period);
+    try testing.expectEqual(model.EntryKind.hotp, entries[3].kind);
+    try testing.expect(entries[3].isReadonly());
+    try testing.expectEqual(model.EntryKind.steam, entries[6].kind);
 }

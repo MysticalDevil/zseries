@@ -89,9 +89,11 @@ pub fn importBackup(allocator: std.mem.Allocator, bytes: []const u8, password: [
             .issuer = "Authy",
             .account_name = try shared.dup(allocator, tokenDescription(token)),
             .secret = try decryptToken(allocator, token, password),
+            .kind = .totp,
             .digits = token.digits,
             .period = 30,
             .algorithm = .sha1,
+            .source_format = "authy",
             .created_at = now,
             .updated_at = now,
         });
@@ -104,9 +106,11 @@ pub fn importBackup(allocator: std.mem.Allocator, bytes: []const u8, password: [
             .issuer = "Authy",
             .account_name = try shared.dup(allocator, app.name),
             .secret = try base32.encodeAlloc(allocator, seed_bytes),
+            .kind = .totp,
             .digits = app.digits,
             .period = 10,
             .algorithm = .sha1,
+            .source_format = "authy",
             .created_at = now,
             .updated_at = now,
         });
@@ -120,6 +124,7 @@ pub fn exportBackup(allocator: std.mem.Allocator, io: std.Io, entries: []const m
     var apps = std.ArrayList(App).empty;
     defer apps.deinit(allocator);
     for (entries, 0..) |entry, i| {
+        if (entry.kind != .totp) return error.UnsupportedEntryKind;
         if (entry.period == 10 and entry.digits == 7 and entry.algorithm == .sha1) {
             const secret_seed = try base32.decodeAlloc(allocator, entry.secret);
             defer allocator.free(secret_seed);
@@ -164,4 +169,5 @@ test "authy backup export import roundtrip" {
     try testing.expectEqual(@as(usize, 1), imported.len);
     try testing.expectEqualStrings("Authy", imported[0].issuer);
     try testing.expectEqualStrings("Deno (Mason)", imported[0].account_name);
+    try testing.expectEqual(model.EntryKind.totp, imported[0].kind);
 }

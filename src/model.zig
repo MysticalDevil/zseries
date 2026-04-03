@@ -21,18 +21,50 @@ pub const Algorithm = enum {
     }
 };
 
+pub const EntryKind = enum {
+    totp,
+    hotp,
+    steam,
+    unknown,
+
+    pub fn fromString(value: []const u8) ?EntryKind {
+        if (std.ascii.eqlIgnoreCase(value, "totp")) return .totp;
+        if (std.ascii.eqlIgnoreCase(value, "hotp")) return .hotp;
+        if (std.ascii.eqlIgnoreCase(value, "steam")) return .steam;
+        if (std.ascii.eqlIgnoreCase(value, "unknown")) return .unknown;
+        return null;
+    }
+
+    pub fn asString(self: EntryKind) []const u8 {
+        return switch (self) {
+            .totp => "totp",
+            .hotp => "hotp",
+            .steam => "steam",
+            .unknown => "unknown",
+        };
+    }
+};
+
 pub const Entry = struct {
     id: []const u8,
     issuer: []const u8,
     account_name: []const u8,
     secret: []const u8,
+    kind: EntryKind = .totp,
     digits: u8 = 6,
     period: u32 = 30,
+    counter: ?u64 = null,
     algorithm: Algorithm = .sha1,
     tags: []const []const u8 = &.{},
     note: ?[]const u8 = null,
+    readonly_reason: ?[]const u8 = null,
+    source_format: ?[]const u8 = null,
     created_at: i64,
     updated_at: i64,
+
+    pub fn isReadonly(self: Entry) bool {
+        return self.readonly_reason != null;
+    }
 };
 
 pub const VaultPayload = struct {

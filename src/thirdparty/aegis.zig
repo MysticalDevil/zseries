@@ -1,6 +1,7 @@
 const std = @import("std");
 const model = @import("../model.zig");
 const shared = @import("shared.zig");
+const normalize = @import("normalize.zig");
 
 const Aead = std.crypto.aead.aes_gcm.Aes256Gcm;
 
@@ -84,21 +85,22 @@ fn entryNoteWithTagsAlloc(allocator: std.mem.Allocator, entry: model.Entry) !?[]
 }
 
 fn entryToModel(allocator: std.mem.Allocator, entry: Entry, now: i64) !?model.Entry {
-    if (!std.ascii.eqlIgnoreCase(entry.type, "totp")) return null;
     const parts = try parseTagsFromNoteAlloc(allocator, entry.note);
-    return .{
-        .id = try shared.dup(allocator, entry.uuid),
-        .issuer = try shared.dup(allocator, entry.issuer orelse ""),
-        .account_name = try shared.dup(allocator, entry.name),
-        .secret = try shared.dup(allocator, entry.info.secret),
+    const converted = try normalize.entryAlloc(allocator, .{
+        .id = entry.uuid,
+        .issuer = entry.issuer orelse "",
+        .account_name = entry.name,
+        .secret = entry.info.secret,
+        .kind = model.EntryKind.fromString(entry.type) orelse .unknown,
         .digits = entry.info.digits,
         .period = entry.info.period orelse 30,
+        .counter = entry.info.counter,
         .algorithm = model.Algorithm.fromString(entry.info.algo) orelse return error.InvalidAlgorithm,
         .tags = parts.tags,
         .note = parts.note,
-        .created_at = now,
-        .updated_at = now,
-    };
+        .source_format = "aegis",
+    }, now, 0);
+    return converted;
 }
 
 fn dbToModelEntries(allocator: std.mem.Allocator, db: Db, now: i64) ![]const model.Entry {
@@ -113,7 +115,12 @@ fn dbToModelEntries(allocator: std.mem.Allocator, db: Db, now: i64) ![]const mod
 
 fn modelToEntry(allocator: std.mem.Allocator, io: std.Io, entry: model.Entry) !Entry {
     return .{
-        .type = "totp",
+        .type = switch (entry.kind) {
+            .totp => "totp",
+            .hotp => "hotp",
+            .steam => "steam",
+            .unknown => return error.UnsupportedEntryKind,
+        },
         .uuid = try shared.uuidLikeAlloc(allocator, io),
         .name = try shared.dup(allocator, entry.account_name),
         .issuer = try shared.dup(allocator, entry.issuer),
@@ -123,6 +130,7 @@ fn modelToEntry(allocator: std.mem.Allocator, io: std.Io, entry: model.Entry) !E
             .algo = entry.algorithm.asString(),
             .digits = entry.digits,
             .period = entry.period,
+            .counter = entry.counter,
         },
     };
 }
@@ -263,9 +271,11 @@ test "imports public aegis plain sample" {
     const bytes = try readFixtureAlloc(testing.allocator, "testdata/aegis_plain.json");
     defer testing.allocator.free(bytes);
     const entries = try importPlain(testing.allocator, bytes, 0);
-    try testing.expectEqual(@as(usize, 3), entries.len);
+    try testing.expectEqual(@as(usize, 7), entries.len);
     try testing.expectEqualStrings("Deno", entries[0].issuer);
     try testing.expectEqualStrings("Mason", entries[0].account_name);
+    try testing.expect(entries[3].isReadonly());
+    try testing.expectEqual(model.EntryKind.steam, entries[6].kind);
 }
 
 test "aegis plain export roundtrip preserves totp entries" {
