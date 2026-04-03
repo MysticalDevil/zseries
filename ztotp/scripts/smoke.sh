@@ -6,13 +6,19 @@
 #   TOTP entries, and run a small end-to-end verification flow.
 #
 # Usage:
-#   ./scripts/smoke.sh [--keep] [--tui] [--password VALUE]
+#   ./scripts/smoke.sh [--keep] [--tui] [--quick] [--password VALUE]
+#
+# Options:
+#   --keep       Keep temporary files after exit
+#   --tui        Run interactive TUI dashboard
+#   --quick      Use fast Argon2 params (for CI/development speed)
+#   --password   Set master password (default: test)
 
 set -eu
 
 keep=0
 run_tui=0
-stress=0
+quick=0
 password="test"
 status_build="pending"
 status_init="pending"
@@ -98,8 +104,8 @@ while [ "$#" -gt 0 ]; do
         --tui)
             run_tui=1
             ;;
-        --stress)
-            stress=1
+        --quick)
+            quick=1
             ;;
         --password)
             shift
@@ -109,7 +115,7 @@ while [ "$#" -gt 0 ]; do
             password="$1"
             ;;
         -h|--help)
-            printf '%s\n' "Usage: ./scripts/smoke.sh [--keep] [--tui] [--stress] [--password VALUE]"
+            printf '%s\n' "Usage: ./scripts/smoke.sh [--keep] [--tui] [--quick] [--password VALUE]"
             exit 0
             ;;
         *)
@@ -126,7 +132,7 @@ json_export="$tmp_root/backup.json"
 csv_export="$tmp_root/backup.csv"
 otpauth_export="$tmp_root/backup.txt"
 seed_otpauth="$tmp_root/seed-otpauth.txt"
-stress_otpauth="$tmp_root/stress-otpauth.txt"
+readonly_otpauth="$tmp_root/readonly-otpauth.txt"
 
 cleanup() {
     if [ "$keep" -eq 0 ]; then
@@ -142,12 +148,15 @@ info "Temporary data root: $tmp_root"
 info "Seed entries:"
 printf '  - 16 built-in TOTP entries across SHA1 / SHA256 / SHA512\n'
 printf '  - 3 readonly fixtures via local otpauth import (2 HOTP + 1 Steam)\n'
-if [ "$stress" -eq 1 ]; then
-    printf '  - 12 extra generated TOTP entries for TUI stress coverage\n'
+if [ "$quick" -eq 1 ]; then
+    info "Quick mode: using low-security Argon2id params"
 fi
 
+build_mode="ReleaseFast"
+build_flag="-Doptimize=${build_mode}"
+
 section "Build"
-run_checked "zig build" zig build
+run_checked "zig build ($build_mode)" zig build "$build_flag"
 status_build="pass"
 
 section "Reset Temp Data"
@@ -155,99 +164,57 @@ rm -rf "$tmp_root"
 mkdir -p "$tmp_root"
 ok "Prepared temporary workspace"
 
+quick_flag=""
+if [ "$quick" -eq 1 ]; then
+    quick_flag="--quick-init"
+fi
+
 run_ztotp() {
     XDG_DATA_HOME="$data_root" ZTOTP_PASSWORD="$password" "$repo_root/zig-out/bin/ztotp" "$@"
 }
 
-seed_entry() {
-    issuer="$1"
-    account="$2"
-    secret="$3"
-    digits="$4"
-    period="$5"
-    algorithm="$6"
-    tag="$7"
-
-    run_ztotp add \
-        --issuer "$issuer" \
-        --account "$account" \
-        --secret "$secret" \
-        --digits "$digits" \
-        --period "$period" \
-        --algorithm "$algorithm" \
-        --tag "$tag"
-    ok "Added $issuer / $account"
+run_ztotp_quick() {
+    if [ "$quick" -eq 1 ]; then
+        XDG_DATA_HOME="$data_root" ZTOTP_PASSWORD="$password" ZTOTP_LOW_SECURITY=1 "$repo_root/zig-out/bin/ztotp" "$@"
+    else
+        run_ztotp "$@"
+    fi
 }
 
-seed_builtin_entries() {
-    seed_entry "GitHub" "alice@example.com" "JBSWY3DPEHPK3PXP" 6 30 SHA1 work
-    seed_entry "OpenAI" "team@example.com" "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" 8 30 SHA256 prod
-    seed_entry "Internal" "ops@example.com" "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA====" 6 60 SHA512 infra
-    seed_entry "GitLab" "platform@example.com" "MFRGGZDFMZTWQ2LK" 6 30 SHA1 work
-    seed_entry "Bitwarden" "vault@example.com" "MZXW6YTBOI" 6 30 SHA1 vault
-    seed_entry "Proton" "mail@example.com" "ONSWG4TFOQ" 6 30 SHA1 mail
-    seed_entry "Cloudflare" "edge@example.com" "MZXW6YTBOJTG633C" 8 45 SHA256 edge
-    seed_entry "Grafana" "alerts@example.com" "KRUGS4ZAON2HE2LOM4" 6 30 SHA1 obs
-    seed_entry "Sentry" "errors@example.com" "NRXW4ZDJNZTSA5DIMU" 6 30 SHA1 obs
-    seed_entry "Linear" "pm@example.com" "OJQW4YLSN5XGOIDBOI" 6 30 SHA1 ops
-    seed_entry "Vercel" "deploy@example.com" "NZXW6YTBONSWG4TFORQQ" 6 30 SHA1 deploy
-    seed_entry "Scale" "batch@example.com" "KRSXG5DSNFXGOIDBNRUWG" 6 30 SHA1 batch
-    seed_entry "PagerDuty" "oncall@example.com" "M5XW6YTBOJSWG5DF" 6 30 SHA1 ops
-    seed_entry "Datadog" "metrics@example.com" "MZXW6YTBORQW4ZBA" 6 30 SHA1 obs
-    seed_entry "Slack" "chat@example.com" "MFZG65DIMVZG63TH" 6 30 SHA1 comms
-    seed_entry "Figma" "design@example.com" "INXW24DMMV4HI2LO" 6 30 SHA1 design
-}
+section "Init"
+run_checked "initialize temporary vault" run_ztotp_quick init $quick_flag
+status_init="pass"
 
-seed_readonly_entries() {
-    cat > "$seed_otpauth" <<'EOF'
+section "Add Entries"
+cat > "$seed_otpauth" <<'EOF'
+otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&algorithm=SHA1&digits=6&period=30
+otpauth://totp/OpenAI:team@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=OpenAI&algorithm=SHA256&digits=8&period=30
+otpauth://totp/Internal:ops@example.com?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA====&issuer=Internal&algorithm=SHA512&digits=6&period=60
+otpauth://totp/GitLab:platform@example.com?secret=MFRGGZDFMZTWQ2LK&issuer=GitLab&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Bitwarden:vault@example.com?secret=MZXW6YTBOI&issuer=Bitwarden&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Proton:mail@example.com?secret=ONSWG4TFOQ&issuer=Proton&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Cloudflare:edge@example.com?secret=MZXW6YTBOJTG633C&issuer=Cloudflare&algorithm=SHA256&digits=8&period=45
+otpauth://totp/Grafana:alerts@example.com?secret=KRUGS4ZAON2HE2LOM4&issuer=Grafana&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Sentry:errors@example.com?secret=NRXW4ZDJNZTSA5DIMU&issuer=Sentry&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Linear:pm@example.com?secret=OJQW4YLSN5XGOIDBOI&issuer=Linear&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Vercel:deploy@example.com?secret=NZXW6YTBONSWG4TFORQQ&issuer=Vercel&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Scale:batch@example.com?secret=KRSXG5DSNFXGOIDBNRUWG&issuer=Scale&algorithm=SHA1&digits=6&period=30
+otpauth://totp/PagerDuty:oncall@example.com?secret=M5XW6YTBOJSWG5DF&issuer=PagerDuty&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Datadog:metrics@example.com?secret=MZXW6YTBORQW4ZBA&issuer=Datadog&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Slack:chat@example.com?secret=MFZG65DIMVZG63TH&issuer=Slack&algorithm=SHA1&digits=6&period=30
+otpauth://totp/Figma:design@example.com?secret=INXW24DMMV4HI2LO&issuer=Figma&algorithm=SHA1&digits=6&period=30
+EOF
+run_ztotp_quick import --from otpauth --file "$seed_otpauth"
+ok "Imported 16 TOTP entries via otpauth"
+
+cat > "$readonly_otpauth" <<'EOF'
 otpauth://hotp/Issuu:James?secret=YOOMIXWS5GN6RTBPUFFWKTW5M4&issuer=Issuu&algorithm=SHA1&digits=6&counter=1
 otpauth://hotp/Nozbe:David?secret=MNUGC3DVMRZXIYJAONUGC4TF&issuer=Nozbe&algorithm=SHA1&digits=8&counter=7
 steam://NB2W45DFOIZA====
 EOF
-    run_ztotp import --from otpauth --file "$seed_otpauth"
-    ok "Imported readonly HOTP and Steam fixtures"
-}
+run_ztotp_quick import --from otpauth --file "$readonly_otpauth"
+ok "Imported readonly HOTP and Steam fixtures"
 
-seed_stress_entries() {
-    : > "$stress_otpauth"
-    i=1
-    while [ "$i" -le 12 ]; do
-        suffix=$(printf '%02d' "$i")
-        case $((i % 3)) in
-            0)
-                algorithm="SHA512"
-                digits=6
-                period=60
-                ;;
-            1)
-                algorithm="SHA1"
-                digits=6
-                period=30
-                ;;
-            2)
-                algorithm="SHA256"
-                digits=8
-                period=45
-                ;;
-        esac
-        printf 'otpauth://totp/Demo%s:user%s@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Demo%s&algorithm=%s&digits=%s&period=%s\n' \
-            "$suffix" "$suffix" "$suffix" "$algorithm" "$digits" "$period" >> "$stress_otpauth"
-        i=$((i + 1))
-    done
-    run_ztotp import --from otpauth --file "$stress_otpauth"
-    ok "Imported 12 extra stress entries"
-}
-
-section "Init"
-run_checked "initialize temporary vault" run_ztotp init
-status_init="pass"
-
-section "Add Entries"
-seed_builtin_entries
-seed_readonly_entries
-if [ "$stress" -eq 1 ]; then
-    seed_stress_entries
-fi
 status_add="pass"
 
 section "List"
@@ -285,8 +252,8 @@ status_export="pass"
 
 section "Re-import JSON Into Fresh Temp Vault"
 rm -rf "$data_root"
-run_ztotp init
-run_ztotp import --from json --file "$json_export"
+run_ztotp_quick init $quick_flag
+run_ztotp_quick import --from json --file "$json_export"
 run_ztotp list
 ok "Re-imported exported JSON into a fresh temporary vault"
 status_reimport="pass"

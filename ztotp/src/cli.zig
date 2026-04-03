@@ -80,6 +80,12 @@ fn hasArg(args: []const []const u8, name: []const u8) bool {
     return false;
 }
 
+fn securityParamsForCommand(env: *const std.process.Environ.Map, args: []const []const u8) storage.SecurityParams {
+    if (hasArg(args, "--quick-init")) return storage.quick_security;
+    if (env.get("ZTOTP_LOW_SECURITY") != null) return storage.quick_security;
+    return storage.default_security;
+}
+
 fn collectRepeatedArgs(allocator: std.mem.Allocator, args: []const []const u8, name: []const u8) ![]const []const u8 {
     var list = std.ArrayList([]const u8).empty;
     defer list.deinit(allocator);
@@ -117,9 +123,13 @@ fn loadEntries(allocator: std.mem.Allocator, io: std.Io, env: *const std.process
     return .{ .password = password, .data_dir = data_dir, .vault = vault };
 }
 
-fn saveEntries(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8, password: []const u8, entries: []const model.Entry) !void {
-    const path = try storage.saveVault(allocator, io, data_dir, password, .{ .entries = entries });
+fn saveEntries(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8, password: []const u8, entries: []const model.Entry, params: storage.SecurityParams) !void {
+    const path = try storage.saveVault(allocator, io, data_dir, password, .{ .entries = entries }, params);
     allocator.free(path);
+}
+
+fn saveEntriesWithVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8, password: []const u8, entries: []const model.Entry, vault: storage.LoadedVault) !void {
+    return saveEntries(allocator, io, data_dir, password, entries, vault.params);
 }
 
 fn runInit(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) !void {
@@ -128,7 +138,8 @@ fn runInit(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
     if (try storage.vaultExists(allocator, io, data_dir)) return error.VaultAlreadyExists;
     const password = try passwordForCommand(allocator, io, env, args);
     defer allocator.free(password);
-    const path = try storage.saveVault(allocator, io, data_dir, password, .{ .entries = &.{} });
+    const params = securityParamsForCommand(env, args);
+    const path = try storage.saveVault(allocator, io, data_dir, password, .{ .entries = &.{} }, params);
     defer allocator.free(path);
     std.debug.print("Initialized vault at {s}\n", .{path});
 }
@@ -166,7 +177,7 @@ fn runAdd(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Envi
         .updated_at = ts,
     });
 
-    try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
+    try saveEntriesWithVault(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator), state.vault);
     std.debug.print("Added entry for {s}/{s}\n", .{ issuer, account });
 }
 
@@ -382,7 +393,7 @@ fn runUpdate(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     entry.updated_at = nowTimestamp(io);
     entries.items[idx] = entry;
 
-    try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
+    try saveEntriesWithVault(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator), state.vault);
     std.debug.print("Updated {s}\n", .{entry.id});
 }
 
@@ -404,7 +415,7 @@ fn runRemove(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
         try entries.append(allocator, entry);
     }
     if (!removed) return error.EntryNotFound;
-    try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
+    try saveEntriesWithVault(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator), state.vault);
     std.debug.print("Removed {s}\n", .{id});
 }
 
@@ -493,7 +504,7 @@ fn runImport(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     defer entries.deinit(allocator);
     try entries.appendSlice(allocator, state.vault.payload.entries);
     try entries.appendSlice(allocator, imported);
-    try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
+    try saveEntriesWithVault(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator), state.vault);
     var readonly_count: usize = 0;
     for (imported) |entry| {
         if (entry.isReadonly()) readonly_count += 1;

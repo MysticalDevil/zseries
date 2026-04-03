@@ -21,6 +21,7 @@ pub const VaultHeader = struct {
 
 pub const LoadedVault = struct {
     payload: model.VaultPayload,
+    params: SecurityParams,
     arena: std.heap.ArenaAllocator,
 
     pub fn deinit(self: *LoadedVault) void {
@@ -32,14 +33,27 @@ fn headerSize() usize {
     return magic.len + 1 + 4 + 4 + 3 + salt_len + Aead.nonce_length + 8;
 }
 
-fn deriveKey(allocator: std.mem.Allocator, password: []const u8, salt: [salt_len]u8, io: std.Io) ![Aead.key_length]u8 {
+pub const SecurityParams = struct {
+    mem_kib: u32 = 64 * 1024,
+    iterations: u32 = 3,
+    lanes: u24 = 1,
+};
+
+pub const default_security = SecurityParams{};
+pub const quick_security = SecurityParams{
+    .mem_kib = 1024,
+    .iterations = 2,
+    .lanes = 1,
+};
+
+fn deriveKey(allocator: std.mem.Allocator, password: []const u8, salt: [salt_len]u8, params: SecurityParams, io: std.Io) ![Aead.key_length]u8 {
     var key: [Aead.key_length]u8 = undefined;
     try argon2.kdf(
         allocator,
         &key,
         password,
         &salt,
-        .{ .m = 64 * 1024, .t = 3, .p = 1 },
+        .{ .m = params.mem_kib, .t = params.iterations, .p = params.lanes },
         .argon2id,
         io,
     );
@@ -99,7 +113,7 @@ pub fn ensureVaultDir(allocator: std.mem.Allocator, io: std.Io, data_dir: []cons
     return path;
 }
 
-pub fn saveVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8, password: []const u8, payload: model.VaultPayload) ![]u8 {
+pub fn saveVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8, password: []const u8, payload: model.VaultPayload, params: SecurityParams) ![]u8 {
     const path = try ensureVaultDir(allocator, io, data_dir);
     errdefer allocator.free(path);
 
@@ -111,7 +125,7 @@ pub fn saveVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8,
     var nonce: [Aead.nonce_length]u8 = undefined;
     io.random(&nonce);
 
-    const key = try deriveKey(allocator, password, salt, io);
+    const key = try deriveKey(allocator, password, salt, params, io);
     const ciphertext = try allocator.alloc(u8, plaintext.len);
     defer allocator.free(ciphertext);
     var tag: [Aead.tag_length]u8 = undefined;
@@ -119,9 +133,9 @@ pub fn saveVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8,
 
     const header = VaultHeader{
         .version = current_version,
-        .mem_kib = 64 * 1024,
-        .iterations = 3,
-        .lanes = 1,
+        .mem_kib = params.mem_kib,
+        .iterations = params.iterations,
+        .lanes = params.lanes,
         .salt = salt,
         .nonce = nonce,
         .ciphertext_len = ciphertext.len + tag.len,
@@ -162,7 +176,12 @@ pub fn loadVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8,
     var tag: [Aead.tag_length]u8 = undefined;
     @memcpy(&tag, cipher_and_tag[ciphertext.len..]);
 
-    const key = try deriveKey(allocator, password, header.salt, io);
+    const params: SecurityParams = .{
+        .mem_kib = header.mem_kib,
+        .iterations = header.iterations,
+        .lanes = header.lanes,
+    };
+    const key = try deriveKey(allocator, password, header.salt, params, io);
     const plaintext = try allocator.alloc(u8, ciphertext.len);
     defer allocator.free(plaintext);
     try Aead.decrypt(plaintext, ciphertext, tag, "", header.nonce, key);
@@ -170,7 +189,7 @@ pub fn loadVault(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8,
     var arena = std.heap.ArenaAllocator.init(allocator);
     errdefer arena.deinit();
     const payload = try parsePayload(arena.allocator(), plaintext);
-    return .{ .payload = payload, .arena = arena };
+    return .{ .payload = payload, .params = params, .arena = arena };
 }
 
 pub fn vaultExists(allocator: std.mem.Allocator, io: std.Io, data_dir: []const u8) !bool {
