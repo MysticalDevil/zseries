@@ -1,5 +1,5 @@
-const buffer = @import("buffer.zig");
-const style = @import("style.zig");
+const buffer = @import("../buffer.zig");
+const style = @import("../style.zig");
 
 pub const Rect = struct { x: usize, y: usize, width: usize, height: usize };
 
