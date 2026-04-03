@@ -51,13 +51,13 @@ const EntryContext = struct {
 fn buildTotpCards(allocator: std.mem.Allocator, entries: []const model.Entry) ![]dashboard.Card {
     var list = std.ArrayList(dashboard.Card).empty;
     defer list.deinit(allocator);
-    for (entries) |entry| {
+    for (entries, 0..) |entry, i| {
         if (entry.kind != .totp or entry.isReadonly()) continue;
         try list.append(allocator, .{
             .width = card_width,
             .height = card_height_totp,
             .drawFn = drawTotpCard,
-            .context = @ptrCast(@constCast(&entry)),
+            .context = @ptrCast(@constCast(&entries[i])),
         });
     }
     return list.toOwnedSlice(allocator);
@@ -66,13 +66,13 @@ fn buildTotpCards(allocator: std.mem.Allocator, entries: []const model.Entry) ![
 fn buildReadonlyCards(allocator: std.mem.Allocator, entries: []const model.Entry) ![]dashboard.Card {
     var list = std.ArrayList(dashboard.Card).empty;
     defer list.deinit(allocator);
-    for (entries) |entry| {
+    for (entries, 0..) |entry, i| {
         if (entry.kind == .totp and !entry.isReadonly()) continue;
         try list.append(allocator, .{
             .width = card_width,
             .height = card_height_readonly,
             .drawFn = drawReadonlyCard,
-            .context = @ptrCast(@constCast(&entry)),
+            .context = @ptrCast(@constCast(&entries[i])),
         });
     }
     return list.toOwnedSlice(allocator);
