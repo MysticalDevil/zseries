@@ -56,3 +56,41 @@ pub fn confirm(allocator: std.mem.Allocator, io: std.Io, prompt: []const u8, def
         std.debug.print("Please enter y or n.\n", .{});
     }
 }
+
+pub fn selectMultiple(allocator: std.mem.Allocator, io: std.Io, count: usize, prompt: []const u8) ![]const usize {
+    var selected = std.ArrayList(usize).empty;
+    errdefer selected.deinit(allocator);
+
+    while (true) {
+        const line = try promptLine(allocator, io, prompt);
+        defer allocator.free(line);
+        const trimmed = std.mem.trim(u8, line, " \t\r\n");
+
+        if (trimmed.len == 0) {
+            std.debug.print("Please enter one or more numbers separated by commas.\n", .{});
+            continue;
+        }
+
+        var valid = true;
+        var iter = std.mem.splitAny(u8, trimmed, ",");
+        while (iter.next()) |part| {
+            const num_str = std.mem.trim(u8, part, " \t");
+            const parsed = std.fmt.parseInt(usize, num_str, 10) catch {
+                valid = false;
+                break;
+            };
+            if (parsed == 0 or parsed > count) {
+                valid = false;
+                break;
+            }
+            try selected.append(allocator, parsed - 1);
+        }
+
+        if (valid and selected.items.len > 0) {
+            return selected.toOwnedSlice(allocator);
+        }
+
+        std.debug.print("Please enter numbers between 1 and {d}, separated by commas.\n", .{count});
+        selected.clearRetainingCapacity();
+    }
+}
