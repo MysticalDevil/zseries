@@ -73,10 +73,10 @@ just smoke          # Run ztotp smoke tests
 
 ```bash
 cd zcli && zig build
-cd ../ztui && zig build
-cd ../zlog && zig build test
-cd ../ztmpfile && zig build test
-cd ../ztotp && zig build test
+cd ztui && zig build
+cd zlog && zig build test
+cd ztmpfile && zig build test
+cd ztotp && zig build test
 ```
 
 ## Project Layout
