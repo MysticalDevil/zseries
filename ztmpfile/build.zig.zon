@@ -1,0 +1,16 @@
+.{
+    .name = .ztmpfile,
+    .version = "0.1.0",
+    .fingerprint = 0xa0f6b34eda7d0cfe,
+    .minimum_zig_version = "0.16.0-dev.3061+9b1eaad13",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "include",
+        "LICENSE",
+        "README.md",
+        "src",
+        "tests",
+    },
+    .dependencies = .{},
+}
