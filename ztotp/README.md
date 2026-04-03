@@ -173,7 +173,9 @@ Key modules:
 
 - `src/cli.zig`: command routing
 - `src/cli/help.zig`: help rendering
-- `src/cli/color.zig`: ANSI styling for CLI help output
+- `zcli/`: shared CLI styling and help-formatting primitives
+- `ztui/`: shared terminal UI rendering primitives
+- `ztmpfile/`: staged temp-file writes for safer vault persistence
 - `src/importers.zig` and `src/exporters.zig`: internal import/export flows
 - `src/thirdparty/`: shared helpers and external format support
 
