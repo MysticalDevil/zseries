@@ -17,6 +17,15 @@ fn writeAll(fd: std.posix.fd_t, bytes: []const u8) !void {
 pub fn writeStdout(bytes: []const u8) !void {
     try writeAll(std.posix.STDOUT_FILENO, bytes);
 }
+
+pub fn homeCursor() !void {
+    try writeAll(std.posix.STDOUT_FILENO, "\x1b[H");
+}
+
+pub fn clearScreen() !void {
+    try writeAll(std.posix.STDOUT_FILENO, "\x1b[2J\x1b[H");
+}
+
 pub fn enterScreen() !void {
     try writeAll(std.posix.STDOUT_FILENO, "\x1b[?1049h\x1b[?25l\x1b[2J\x1b[H");
 }
@@ -27,6 +36,8 @@ pub fn restoreScreen() !void {
 test "terminal helper symbols are available" {
     const testing = std.testing;
     try testing.expect(@TypeOf(writeStdout) == fn ([]const u8) anyerror!void);
+    try testing.expect(@TypeOf(homeCursor) == fn () anyerror!void);
+    try testing.expect(@TypeOf(clearScreen) == fn () anyerror!void);
     try testing.expect(@TypeOf(enterScreen) == fn () anyerror!void);
     try testing.expect(@TypeOf(restoreScreen) == fn () anyerror!void);
 }
