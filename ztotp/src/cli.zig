@@ -5,10 +5,11 @@ const totp = @import("totp.zig");
 const importers = @import("importers.zig");
 const exporters = @import("exporters.zig");
 const input = @import("input.zig");
+const zargs = @import("zcli").args;
 const color = @import("zcli").color;
 const zlog = @import("zlog");
 const help = @import("cli/help.zig");
-const tui = @import("tui/mod.zig");
+const tui = @import("tui/root.zig");
 
 pub const CommandError = error{ InvalidArgs, EntryNotFound, VaultAlreadyExists, VaultMissing };
 
@@ -62,22 +63,12 @@ fn printHelp(allocator: std.mem.Allocator, env: *const std.process.Environ.Map, 
     std.debug.print("{s}", .{text});
 }
 
-fn argValue(args: []const []const u8, name: []const u8) ?[]const u8 {
-    var i: usize = 0;
-    while (i < args.len) : (i += 1) {
-        if (std.mem.eql(u8, args[i], name)) {
-            if (i + 1 < args.len) return args[i + 1];
-            return null;
-        }
-    }
-    return null;
+inline fn hasArg(args: []const []const u8, name: []const u8) bool {
+    return zargs.hasFlag(args, name);
 }
 
-fn hasArg(args: []const []const u8, name: []const u8) bool {
-    for (args) |arg| {
-        if (std.mem.eql(u8, arg, name)) return true;
-    }
-    return false;
+inline fn argValue(args: []const []const u8, name: []const u8) ?[]const u8 {
+    return zargs.flagValue(args, name);
 }
 
 fn securityParamsForCommand(env: *const std.process.Environ.Map, args: []const []const u8) storage.SecurityParams {
@@ -87,15 +78,7 @@ fn securityParamsForCommand(env: *const std.process.Environ.Map, args: []const [
 }
 
 fn collectRepeatedArgs(allocator: std.mem.Allocator, args: []const []const u8, name: []const u8) ![]const []const u8 {
-    var list = std.ArrayList([]const u8).empty;
-    defer list.deinit(allocator);
-    var i: usize = 0;
-    while (i < args.len) : (i += 1) {
-        if (std.mem.eql(u8, args[i], name) and i + 1 < args.len) {
-            try list.append(allocator, try allocator.dupe(u8, args[i + 1]));
-        }
-    }
-    return list.toOwnedSlice(allocator);
+    return zargs.repeatedFlags(allocator, args, name);
 }
 
 fn passwordForCommand(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) ![]const u8 {

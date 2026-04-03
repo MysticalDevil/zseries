@@ -11,4 +11,4 @@ pub const ztui = @import("ztui");
 pub const zlog = @import("zlog");
 pub const ztmpfile = @import("ztmpfile");
 pub const cli_help = @import("cli/help.zig");
-pub const tui = @import("tui/mod.zig");
+pub const tui = @import("tui/root.zig");
