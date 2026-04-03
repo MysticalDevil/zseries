@@ -26,6 +26,43 @@ test "builder applies prefix suffix and randLen lower bound" {
     }
 }
 
+test "builder maxAttempts lower bound is one" {
+    var b = ztmpfile.Builder.init();
+    _ = b.maxAttempts(0);
+
+    try std.testing.expectEqual(@as(usize, 1), b.options.max_attempts);
+}
+
+test "tempdir persist clears path and keeps directory" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var dir = try ztmpfile.tempdir(std.testing.allocator);
+
+    const kept = dir.persist();
+    defer std.testing.allocator.free(kept);
+    defer ztmpfile.compat.deletePath(kept) catch {};
+
+    try std.testing.expectEqual(@as(usize, 0), dir.path().len);
+
+    const opened = try std.Io.Dir.openDirAbsolute(io, kept, .{});
+    opened.close(io);
+}
+
+test "named tempfile persist clears path and preserves renamed file" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    var file = try ztmpfile.tempfile(std.testing.allocator);
+    const target = try std.fmt.allocPrint(std.testing.allocator, "{s}.renamed", .{file.path()});
+    defer std.testing.allocator.free(target);
+
+    const kept = try file.persist(target);
+    defer std.testing.allocator.free(kept);
+    defer std.Io.Dir.deleteFileAbsolute(io, kept) catch {};
+
+    try std.testing.expectEqual(@as(usize, 0), file.path().len);
+
+    const reopened = try std.Io.Dir.openFileAbsolute(io, kept, .{ .mode = .read_only });
+    reopened.close(io);
+}
+
 test "tempdirIn returns error for missing parent directory" {
     const missing = "/tmp/ztmpfile-missing-parent-unit";
     try std.testing.expectError(error.FileNotFound, ztmpfile.tempdirIn(std.testing.allocator, missing));
