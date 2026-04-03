@@ -179,5 +179,5 @@ fn maxCardHeight(cards: []const Card) usize {
 fn sectionHeight(count: usize, per_row: usize, card_height: usize) usize {
     if (count == 0) return 3;
     const rows = @divFloor(count + per_row - 1, per_row);
-    return 1 + rows * (card_height + 1);
+    return 2 + rows * (card_height + 1);
 }
