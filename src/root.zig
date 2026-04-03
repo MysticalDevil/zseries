@@ -5,3 +5,4 @@ pub const storage = @import("storage.zig");
 pub const importers = @import("importers.zig");
 pub const exporters = @import("exporters.zig");
 pub const input = @import("input.zig");
+pub const integration_tests = @import("integration_test.zig");

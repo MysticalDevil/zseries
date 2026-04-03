@@ -102,7 +102,7 @@ fn parseOtpAuthUri(allocator: std.mem.Allocator, line: []const u8, now: i64, id_
     const uri = try std.Uri.parse(line);
     if (!std.ascii.eqlIgnoreCase(uri.scheme, "otpauth")) return error.InvalidOtpAuth;
     const host = try uri.getHostAlloc(allocator);
-    if (!std.ascii.eqlIgnoreCase(host.bytes, "totp")) return error.InvalidOtpAuth;
+    if (!std.ascii.eqlIgnoreCase(host.bytes, "totp")) return error.UnsupportedOtpType;
     const raw_path = try decodeUriComponentAlloc(allocator, uri.path);
     defer allocator.free(raw_path);
     const label = std.mem.trim(u8, raw_path, "/");
@@ -137,7 +137,14 @@ pub fn otpauth(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]con
     while (lines.next()) |raw_line| {
         const line = std.mem.trim(u8, raw_line, " \t\r\n");
         if (line.len == 0) continue;
-        try entries.append(allocator, try parseOtpAuthUri(allocator, line, now, index));
+        const entry = parseOtpAuthUri(allocator, line, now, index) catch |err| switch (err) {
+            error.UnsupportedOtpType => {
+                index += 1;
+                continue;
+            },
+            else => return err,
+        };
+        try entries.append(allocator, entry);
         index += 1;
     }
     return entries.toOwnedSlice(allocator);
@@ -148,3 +155,18 @@ pub const third_party = struct {
     pub const aegis_encrypted = aegis.importEncrypted;
     pub const authy_backup = authy.importBackup;
 };
+
+fn readFixtureAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.Io.Threaded.init_single_threaded, path, allocator, .limited(std.math.maxInt(usize)));
+}
+
+test "imports supported otpauth entries from public sample" {
+    const testing = std.testing;
+    const bytes = try readFixtureAlloc(testing.allocator, "testdata/otpauth_plain.txt");
+    defer testing.allocator.free(bytes);
+    const entries = try otpauth(testing.allocator, bytes, 0);
+    try testing.expectEqual(@as(usize, 3), entries.len);
+    try testing.expectEqualStrings("Deno", entries[0].issuer);
+    try testing.expectEqual(@as(u8, 7), entries[1].digits);
+    try testing.expectEqual(@as(u32, 50), entries[2].period);
+}

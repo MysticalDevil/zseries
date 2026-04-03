@@ -83,8 +83,8 @@ fn entryNoteWithTagsAlloc(allocator: std.mem.Allocator, entry: model.Entry) !?[]
     return try std.fmt.allocPrint(allocator, "tags:{s}", .{tags});
 }
 
-fn entryToModel(allocator: std.mem.Allocator, entry: Entry, now: i64) !model.Entry {
-    if (!std.ascii.eqlIgnoreCase(entry.type, "totp")) return error.UnsupportedOtpType;
+fn entryToModel(allocator: std.mem.Allocator, entry: Entry, now: i64) !?model.Entry {
+    if (!std.ascii.eqlIgnoreCase(entry.type, "totp")) return null;
     const parts = try parseTagsFromNoteAlloc(allocator, entry.note);
     return .{
         .id = try shared.dup(allocator, entry.uuid),
@@ -104,7 +104,10 @@ fn entryToModel(allocator: std.mem.Allocator, entry: Entry, now: i64) !model.Ent
 fn dbToModelEntries(allocator: std.mem.Allocator, db: Db, now: i64) ![]const model.Entry {
     var entries = std.ArrayList(model.Entry).empty;
     defer entries.deinit(allocator);
-    for (db.entries) |entry| try entries.append(allocator, try entryToModel(allocator, entry, now));
+    for (db.entries) |entry| {
+        const converted = try entryToModel(allocator, entry, now);
+        if (converted) |value| try entries.append(allocator, value);
+    }
     return entries.toOwnedSlice(allocator);
 }
 
@@ -151,16 +154,16 @@ fn decryptMasterKey(allocator: std.mem.Allocator, slot: Slot, password: []const 
 }
 
 pub fn importPlain(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]const model.Entry {
-    const vault = try std.json.parseFromSliceLeaky(Vault, allocator, bytes, .{ .allocate = .alloc_always });
+    const vault = try std.json.parseFromSliceLeaky(Vault, allocator, bytes, .{ .allocate = .alloc_always, .ignore_unknown_fields = true });
     const db = switch (vault.db) {
-        .object => try std.json.parseFromValueLeaky(Db, allocator, vault.db, .{}),
+        .object => try std.json.parseFromValueLeaky(Db, allocator, vault.db, .{ .ignore_unknown_fields = true }),
         else => return error.InvalidAegisVault,
     };
     return dbToModelEntries(allocator, db, now);
 }
 
 pub fn importEncrypted(allocator: std.mem.Allocator, bytes: []const u8, password: []const u8, now: i64) ![]const model.Entry {
-    const vault = try std.json.parseFromSliceLeaky(Vault, allocator, bytes, .{ .allocate = .alloc_always });
+    const vault = try std.json.parseFromSliceLeaky(Vault, allocator, bytes, .{ .allocate = .alloc_always, .ignore_unknown_fields = true });
     const slots = vault.header.slots orelse return error.InvalidAegisVault;
     const params = vault.header.params orelse return error.InvalidAegisVault;
     const master_key = try decryptMasterKey(allocator, slots[0], password);
@@ -181,7 +184,7 @@ pub fn importEncrypted(allocator: std.mem.Allocator, bytes: []const u8, password
     const plaintext = try allocator.alloc(u8, ciphertext.len);
     defer allocator.free(plaintext);
     try Aead.decrypt(plaintext, ciphertext, tag, "", nonce, master_key);
-    const db = try std.json.parseFromSliceLeaky(Db, allocator, plaintext, .{ .allocate = .alloc_always });
+    const db = try std.json.parseFromSliceLeaky(Db, allocator, plaintext, .{ .allocate = .alloc_always, .ignore_unknown_fields = true });
     return dbToModelEntries(allocator, db, now);
 }
 
@@ -249,4 +252,29 @@ pub fn exportEncrypted(allocator: std.mem.Allocator, io: std.Io, entries: []cons
         .header = .{ .slots = &.{slot}, .params = .{ .nonce = try shared.hexEncodeAlloc(allocator, &db_nonce), .tag = try shared.hexEncodeAlloc(allocator, &db_tag) } },
         .db = try shared.base64EncodeAlloc(allocator, db_ciphertext),
     }, .{ .whitespace = .indent_2 })});
+}
+
+fn readFixtureAlloc(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
+    return std.Io.Dir.cwd().readFileAlloc(std.Io.Threaded.init_single_threaded, path, allocator, .limited(std.math.maxInt(usize)));
+}
+
+test "imports public aegis plain sample" {
+    const testing = std.testing;
+    const bytes = try readFixtureAlloc(testing.allocator, "testdata/aegis_plain.json");
+    defer testing.allocator.free(bytes);
+    const entries = try importPlain(testing.allocator, bytes, 0);
+    try testing.expectEqual(@as(usize, 3), entries.len);
+    try testing.expectEqualStrings("Deno", entries[0].issuer);
+    try testing.expectEqualStrings("Mason", entries[0].account_name);
+}
+
+test "aegis plain export roundtrip preserves totp entries" {
+    const testing = std.testing;
+    const bytes = try readFixtureAlloc(testing.allocator, "testdata/aegis_plain.json");
+    defer testing.allocator.free(bytes);
+    const entries = try importPlain(testing.allocator, bytes, 0);
+    const exported = try exportPlain(testing.allocator, std.Io.Threaded.init_single_threaded, entries);
+    defer testing.allocator.free(exported);
+    const roundtrip = try importPlain(testing.allocator, exported, 0);
+    try testing.expectEqual(@as(usize, entries.len), roundtrip.len);
 }

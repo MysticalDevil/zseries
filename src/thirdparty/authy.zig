@@ -142,3 +142,26 @@ pub fn exportBackup(allocator: std.mem.Allocator, io: std.Io, entries: []const m
         .apps = .{ .apps = try apps.toOwnedSlice(allocator) },
     }, .{ .whitespace = .indent_2 })});
 }
+
+test "authy backup export import roundtrip" {
+    const testing = std.testing;
+    const entries = [_]model.Entry{
+        .{
+            .id = "one",
+            .issuer = "Deno",
+            .account_name = "Mason",
+            .secret = "4SJHB4GSD43FZBAI7C2HLRJGPQ",
+            .digits = 6,
+            .period = 30,
+            .algorithm = .sha1,
+            .created_at = 0,
+            .updated_at = 0,
+        },
+    };
+    const exported = try exportBackup(testing.allocator, std.Io.Threaded.init_single_threaded, &entries, "authy-pass");
+    defer testing.allocator.free(exported);
+    const imported = try importBackup(testing.allocator, exported, "authy-pass", 0);
+    try testing.expectEqual(@as(usize, 1), imported.len);
+    try testing.expectEqualStrings("Authy", imported[0].issuer);
+    try testing.expectEqualStrings("Deno (Mason)", imported[0].account_name);
+}

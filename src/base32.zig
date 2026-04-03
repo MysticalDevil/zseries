@@ -8,7 +8,7 @@ pub const Padding = enum { padded, none };
 fn encodedLen(input_len: usize, padding: Padding) usize {
     const full = (input_len / 5) * 8;
     const rem = input_len % 5;
-    const extra = switch (rem) {
+    const extra: usize = switch (rem) {
         0 => 0,
         1 => if (padding == .padded) 8 else 2,
         2 => if (padding == .padded) 8 else 4,
