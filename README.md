@@ -13,6 +13,7 @@ Suggested repository description:
 - `ztotp/`: local-first encrypted TOTP application
 - `zcli/`: shared CLI styling and help-formatting primitives
 - `ztui/`: shared TUI buffer, terminal, and widget primitives
+- `zlog/`: reusable structured logging primitives
 - `ztmpfile/`: temporary file utility project
 
 ## Shared Workspace Files
@@ -52,6 +53,7 @@ Other projects:
 ```bash
 cd zcli && zig build
 cd ../ztui && zig build
+cd ../zlog && zig build test
 cd ../ztmpfile && zig build test
 ```
 
