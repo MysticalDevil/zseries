@@ -5,3 +5,4 @@ pub const args = @import("args.zig");
 pub const table = @import("table.zig");
 pub const exit = @import("exit.zig");
 pub const format = @import("format.zig");
+pub const help = @import("help.zig");
