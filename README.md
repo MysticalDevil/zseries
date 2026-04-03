@@ -1,9 +1,6 @@
 # ztotp
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Zig](https://img.shields.io/badge/zig-0.16.0--dev-f7a41d)
-![Local First](https://img.shields.io/badge/storage-local--first-2d9d78)
-![TOTP](https://img.shields.io/badge/otp-TOTP-6f42c1)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Zig](https://img.shields.io/badge/Zig-0.16.0_dev-F7A41D?logo=zig&logoColor=white) ![Local First](https://img.shields.io/badge/storage-local--first-2D9D78) ![TOTP](https://img.shields.io/badge/otp-TOTP-6F42C1)
 
 `ztotp` is a local-first encrypted TOTP CLI implemented in Zig.
 

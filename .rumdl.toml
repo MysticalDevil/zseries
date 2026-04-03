@@ -1,0 +1,5 @@
+[global]
+respect-gitignore = true
+disable = [
+    "MD013",
+]
