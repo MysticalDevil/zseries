@@ -58,6 +58,9 @@ List all stored entries:
 ztotp list
 ```
 
+The list output shows entry type as well as readonly state for imported
+non-TOTP records.
+
 Search by issuer:
 
 ```bash
@@ -97,6 +100,9 @@ The output includes:
 - account name
 - current code
 - remaining seconds in the current time step
+
+Readonly HOTP, Steam, and unknown imported kinds are rejected by
+`ztotp code` with a clear message instead of being silently skipped.
 
 ## Update Entries
 

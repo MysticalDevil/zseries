@@ -30,6 +30,9 @@ clear, auditable storage format.
   `update`, and `remove`
 - Import and export support for `otpauth`, `json`, `csv`, `aegis`,
   `aegis-encrypted`, and `authy`
+- Import support for `2fas`, `2fas-encrypted`, `andotp`,
+  `andotp-encrypted`, `andotp-encrypted-old`, `bitwarden`,
+  `proton-authenticator`, and `ente-auth`
 - Hidden TTY password prompt with `--password` and `ZTOTP_PASSWORD` overrides
 - Public fixture coverage for migration formats and cross-module integration tests
 
@@ -108,6 +111,14 @@ ztotp update --help
 | `aegis` | Yes | Yes | No | Compatible with public Aegis plain backup format |
 | `aegis-encrypted` | Yes | Yes | Yes | Uses the current vault password during import/export |
 | `authy` | Yes | Yes | Yes | Compatible with `authy-export --save` style backup JSON |
+| `2fas` | Yes | No | No | Supports plain `.2fas` exports |
+| `2fas-encrypted` | Yes | No | Yes | Uses the current vault password to decrypt exported `.2fas` files |
+| `andotp` | Yes | No | No | Supports plain andOTP JSON exports |
+| `andotp-encrypted` | Yes | No | Yes | Supports current encrypted andOTP backups |
+| `andotp-encrypted-old` | Yes | No | Yes | Supports legacy encrypted andOTP backups |
+| `bitwarden` | Yes | No | Mixed | Extracts OTP URIs from Bitwarden JSON or CSV exports |
+| `proton-authenticator` | Yes | No | No | Imports Proton Authenticator export JSON |
+| `ente-auth` | Yes | No | No | Imports newline-delimited otpauth / steam URIs |
 
 More detail lives in [`docs/formats.md`](docs/formats.md) and
 [`docs/migration.md`](docs/migration.md).
@@ -121,6 +132,7 @@ More detail lives in [`docs/formats.md`](docs/formats.md) and
   - `--password <value>`
   - `ZTOTP_PASSWORD`
   - hidden TTY prompt
+- Non-TOTP imports are stored as readonly entries and shown by `ztotp list`
 
 Read the full model and caveats in [`docs/security.md`](docs/security.md).
 

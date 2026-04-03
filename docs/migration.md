@@ -9,6 +9,11 @@ This guide covers moving entries in and out of `ztotp`.
 - [Export](#export)
 - [Migrate from Aegis](#migrate-from-aegis)
 - [Migrate from Authy](#migrate-from-authy)
+- [Migrate from 2FAS](#migrate-from-2fas)
+- [Migrate from andOTP](#migrate-from-andotp)
+- [Migrate from Bitwarden](#migrate-from-bitwarden)
+- [Migrate from Proton Authenticator](#migrate-from-proton-authenticator)
+- [Migrate from Ente Auth](#migrate-from-ente-auth)
 - [Migrate from otpauth Text Files](#migrate-from-otpauth-text-files)
 - [Migration Checklist](#migration-checklist)
 
@@ -19,6 +24,14 @@ This guide covers moving entries in and out of `ztotp`.
 - `aegis`
 - `aegis-encrypted`
 - `authy`
+- `2fas`
+- `2fas-encrypted`
+- `andotp`
+- `andotp-encrypted`
+- `andotp-encrypted-old`
+- `bitwarden`
+- `proton-authenticator`
+- `ente-auth`
 - `otpauth`
 - `json`
 - `csv`
@@ -102,6 +115,86 @@ Notes:
 - This path is intended for offline backup compatibility
 - Use it as a migration path, not as your primary long-term archive format
 - Prefer `json` for full native `ztotp` backups
+
+## Migrate from 2FAS
+
+Plain export:
+
+```bash
+ztotp import --from 2fas --file twofas_plain.2fas
+```
+
+Encrypted export:
+
+```bash
+ztotp import --from 2fas-encrypted --file twofas_encrypted.2fas
+```
+
+Notes:
+
+- non-TOTP records such as HOTP and Steam are imported as readonly
+- encrypted imports use the current vault password
+
+## Migrate from andOTP
+
+Plain export:
+
+```bash
+ztotp import --from andotp --file andotp.json
+```
+
+Encrypted export:
+
+```bash
+ztotp import --from andotp-encrypted --file andotp.bin
+```
+
+Legacy encrypted export:
+
+```bash
+ztotp import --from andotp-encrypted-old --file andotp_old.bin
+```
+
+Notes:
+
+- HOTP and Steam entries are preserved as readonly
+- current and legacy encrypted formats use different key derivation schemes
+
+## Migrate from Bitwarden
+
+JSON export:
+
+```bash
+ztotp import --from bitwarden --file bitwarden.json
+```
+
+CSV export:
+
+```bash
+ztotp import --from bitwarden --file bitwarden.csv
+```
+
+Notes:
+
+- only items with TOTP or Steam-style URI data are imported
+- standard logins without OTP data are ignored
+
+## Migrate from Proton Authenticator
+
+```bash
+ztotp import --from proton-authenticator --file proton_authenticator.json
+```
+
+## Migrate from Ente Auth
+
+```bash
+ztotp import --from ente-auth --file ente_auth.txt
+```
+
+Notes:
+
+- Ente Auth import uses the shared URI parser
+- non-TOTP URIs are preserved as readonly entries
 
 ## Migrate from otpauth Text Files
 
