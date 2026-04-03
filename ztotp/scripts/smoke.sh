@@ -260,13 +260,13 @@ status_reimport="pass"
 
 if [ "$run_tui" -eq 1 ]; then
     section "TUI"
-    if command -v script >/dev/null 2>&1; then
-        info "Press q to exit the TUI..."
-        script -qec "env XDG_DATA_HOME=$data_root ZTOTP_PASSWORD=$password $repo_root/zig-out/bin/ztotp tui" /dev/null
+    if [ -t 0 ] && [ -t 1 ]; then
+        info "Running TUI interactively..."
+        XDG_DATA_HOME="$data_root" ZTOTP_PASSWORD="$password" "$repo_root/zig-out/bin/ztotp" tui
         ok "TUI exited successfully"
         status_tui="pass"
     else
-        warn "Skipping TUI: 'script' is not available."
+        warn "Skipping TUI: requires interactive terminal (no TTY detected)"
         status_tui="skipped"
     fi
 fi
