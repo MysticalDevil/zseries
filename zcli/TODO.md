@@ -4,18 +4,18 @@
 
 ### 参数解析
 
-- [ ] 位置参数解析
-- [ ] 短选项 (`-f`) / 长选项 (`--flag`)
-- [ ] 子命令路由
-- [ ] 参数验证与类型转换
+- [x] 位置参数解析 (`args.positionalArg`)
+- [x] 短选项 (`-f`) / 长选项 (`--flag`) (`args.hasFlag`, `args.flagValue`)
+- [x] 子命令路由 (`args.Subcommand`, `args.routeSubcommand`)
+- [x] 参数验证与类型转换 (`args.flagValueInt`)
 - [ ] 自动生成 `--help`
 
 ### 输入/输出
 
-- [ ] 进度条 (progress bar)
 - [ ] 表格输出 (table)
 - [ ] JSON/YAML 格式化输出
 - [ ] 分页显示 (pager)
+- [x] 进度条 (progress bar) - 已在 ztui/widgets.zig 实现
 
 ### 交互提示
 
