@@ -15,13 +15,14 @@ Shared CLI styling and help-formatting primitives for Zig projects.
 
 ## Usage
 
-**Add dependency** (in `build.zig.zon`):
+`zcli` currently lives inside the `zseries` monorepo. Zig package fetch expects the package root to contain `build.zig.zon`, so you cannot depend on the monorepo archive URL directly.
+
+Vendor the `zcli/` directory into your project, then add the dependency in `build.zig.zon`:
 
 ```zig
 .dependencies = .{
     .zcli = .{
-        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
-        .hash = "<package-hash>",
+        .path = "vendor/zcli",
     },
 },
 ```

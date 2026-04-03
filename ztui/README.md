@@ -15,13 +15,14 @@ Shared TUI primitives for Zig terminal applications.
 
 ## Usage
 
-**Add dependency** (in `build.zig.zon`):
+`ztui` currently lives inside the `zseries` monorepo. Zig package fetch expects the package root to contain `build.zig.zon`, so you cannot depend on the monorepo archive URL directly.
+
+Vendor the `ztui/` directory into your project, then add the dependency in `build.zig.zon`:
 
 ```zig
 .dependencies = .{
     .ztui = .{
-        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
-        .hash = "<package-hash>",
+        .path = "vendor/ztui",
     },
 },
 ```

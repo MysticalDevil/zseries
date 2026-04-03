@@ -14,13 +14,14 @@ Structured logging with levels and multiple sinks for Zig projects.
 
 ## Usage
 
-**Add dependency** (in `build.zig.zon`):
+`zlog` currently lives inside the `zseries` monorepo. Zig package fetch expects the package root to contain `build.zig.zon`, so you cannot depend on the monorepo archive URL directly.
+
+Vendor the `zlog/` directory into your project, then add the dependency in `build.zig.zon`:
 
 ```zig
 .dependencies = .{
     .zlog = .{
-        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
-        .hash = "<package-hash>",
+        .path = "vendor/zlog",
     },
 },
 ```
@@ -62,11 +63,11 @@ zig build test
 const Logger = struct {
     pub fn init(allocator: Allocator, io: Io, level: Level) Logger;
     pub fn deinit(self: *Logger) void;
-    
+
     pub fn addFileSink(self: *Logger, path: []const u8) !void;
     pub fn addStdoutSink(self: *Logger) !void;
     pub fn addStderrSink(self: *Logger) !void;
-    
+
     pub fn log(self: *Logger, level: Level, message: []const u8, fields: []const Field) void;
 };
 

@@ -14,13 +14,14 @@ Cross-platform temp file/dir library with optional C ABI.
 
 ## Usage
 
-**Add dependency** (in `build.zig.zon`):
+`ztmpfile` currently lives inside the `zseries` monorepo. Zig package fetch expects the package root to contain `build.zig.zon`, so you cannot depend on the monorepo archive URL directly.
+
+Vendor the `ztmpfile/` directory into your project, then add the dependency in `build.zig.zon`:
 
 ```zig
 .dependencies = .{
     .ztmpfile = .{
-        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
-        .hash = "<package-hash>",
+        .path = "vendor/ztmpfile",
     },
 },
 ```
