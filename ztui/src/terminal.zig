@@ -23,3 +23,10 @@ pub fn enterScreen() !void {
 pub fn restoreScreen() !void {
     try writeAll(std.posix.STDOUT_FILENO, "\x1b[?25h\x1b[?1049l");
 }
+
+test "terminal helper symbols are available" {
+    const testing = std.testing;
+    try testing.expect(@TypeOf(writeStdout) == fn ([]const u8) anyerror!void);
+    try testing.expect(@TypeOf(enterScreen) == fn () anyerror!void);
+    try testing.expect(@TypeOf(restoreScreen) == fn () anyerror!void);
+}

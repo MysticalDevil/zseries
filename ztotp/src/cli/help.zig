@@ -28,27 +28,27 @@ pub fn isKnownCommand(name: []const u8) bool {
     return false;
 }
 
-fn writeHeader(writer: anytype, use_color: bool, title: []const u8, subtitle: []const u8) !void {
+fn writeHeader(writer: *std.Io.Writer, use_color: bool, title: []const u8, subtitle: []const u8) !void {
     try helpfmt.writeHeader(writer, use_color, title, subtitle);
 }
 
-fn writeHeading(writer: anytype, use_color: bool, name: []const u8) !void {
+fn writeHeading(writer: *std.Io.Writer, use_color: bool, name: []const u8) !void {
     try helpfmt.writeHeading(writer, use_color, name);
 }
 
-fn writeCommandRow(writer: anytype, use_color: bool, name: []const u8, summary: []const u8) !void {
+fn writeCommandRow(writer: *std.Io.Writer, use_color: bool, name: []const u8, summary: []const u8) !void {
     try helpfmt.writeCommandRow(writer, use_color, name, summary);
 }
 
-fn writeBullet(writer: anytype, use_color: bool, label: []const u8, value: []const u8) !void {
+fn writeBullet(writer: *std.Io.Writer, use_color: bool, label: []const u8, value: []const u8) !void {
     try helpfmt.writeBullet(writer, use_color, label, value);
 }
 
-fn writeExample(writer: anytype, use_color: bool, example: []const u8) !void {
+fn writeExample(writer: *std.Io.Writer, use_color: bool, example: []const u8) !void {
     try helpfmt.writeExample(writer, use_color, example);
 }
 
-fn writeFormats(writer: anytype, use_color: bool) !void {
+fn writeFormats(writer: *std.Io.Writer, use_color: bool) !void {
     try writeHeading(writer, use_color, "Formats");
     try writer.writeAll("  ");
     const formats = [_][]const u8{

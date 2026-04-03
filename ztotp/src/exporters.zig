@@ -7,7 +7,7 @@ fn dup(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
     return try allocator.dupe(u8, value);
 }
 
-fn escapeCsvField(writer: anytype, field: []const u8) !void {
+fn escapeCsvField(writer: *std.Io.Writer, field: []const u8) !void {
     const needs_quotes = std.mem.indexOfAny(u8, field, ",\n\r\"") != null;
     if (!needs_quotes) return writer.writeAll(field);
     try writer.writeByte('"');

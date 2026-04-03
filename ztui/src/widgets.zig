@@ -26,3 +26,25 @@ pub fn label(buf: *buffer.Buffer, x: usize, y: usize, width: usize, text: []cons
 pub fn progressBar(buf: *buffer.Buffer, x: usize, y: usize, width: usize, filled: usize, bar_style: style.StyleId, empty_style: style.StyleId) void {
     for (0..width) |i| if (i < filled) buf.putRune(x + i, y, '█', bar_style) else buf.putRune(x + i, y, '░', empty_style);
 }
+
+test "boxSingle draws unicode corners" {
+    const testing = @import("std").testing;
+    var buf = try buffer.Buffer.init(testing.allocator, 8, 4);
+    defer buf.deinit();
+    boxSingle(&buf, .{ .x = 0, .y = 0, .width = 8, .height = 4 }, .heading);
+    const rendered = try buf.renderAlloc();
+    defer testing.allocator.free(rendered);
+    try testing.expect(@import("std").mem.indexOf(u8, rendered, "╭") != null);
+    try testing.expect(@import("std").mem.indexOf(u8, rendered, "╯") != null);
+}
+
+test "progressBar uses filled and empty runes" {
+    const testing = @import("std").testing;
+    var buf = try buffer.Buffer.init(testing.allocator, 6, 1);
+    defer buf.deinit();
+    progressBar(&buf, 0, 0, 6, 3, .code, .muted);
+    const rendered = try buf.renderAlloc();
+    defer testing.allocator.free(rendered);
+    try testing.expect(@import("std").mem.indexOf(u8, rendered, "███") != null);
+    try testing.expect(@import("std").mem.indexOf(u8, rendered, "░") != null);
+}

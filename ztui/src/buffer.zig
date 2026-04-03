@@ -85,3 +85,23 @@ pub const Buffer = struct {
         return out.toOwnedSlice();
     }
 };
+
+test "buffer fillRect fills area" {
+    const testing = std.testing;
+    var buf = try Buffer.init(testing.allocator, 4, 2);
+    defer buf.deinit();
+    buf.fillRect(1, 0, 2, 2, '█', .code);
+    const rendered = try buf.renderAlloc();
+    defer testing.allocator.free(rendered);
+    try testing.expect(std.mem.indexOf(u8, rendered, "██") != null);
+}
+
+test "putTextClipped adds ellipsis when clipped" {
+    const testing = std.testing;
+    var buf = try Buffer.init(testing.allocator, 5, 1);
+    defer buf.deinit();
+    buf.putTextClipped(0, 0, 4, "Internal", .normal);
+    const rendered = try buf.renderAlloc();
+    defer testing.allocator.free(rendered);
+    try testing.expect(std.mem.indexOf(u8, rendered, "Int…") != null);
+}

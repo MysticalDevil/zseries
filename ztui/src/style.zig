@@ -25,3 +25,10 @@ pub fn ansi(style_id: StyleId) []const u8 {
         .badge => "\x1b[1;97;44m",
     };
 }
+
+test "ansi returns distinct sequences" {
+    const testing = @import("std").testing;
+    try testing.expectEqualStrings("\x1b[1;96m", ansi(.title));
+    try testing.expectEqualStrings("\x1b[1;92m", ansi(.code));
+    try testing.expectEqualStrings("\x1b[0m", ansi(.normal));
+}

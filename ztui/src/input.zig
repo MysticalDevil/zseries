@@ -44,3 +44,14 @@ pub fn readEvent(timeout_ms: i32) !Event {
     if (ch >= 0x20 and ch <= 0x7e) return .{ .character = ch };
     return .none;
 }
+
+test "event union stores typed character" {
+    const testing = std.testing;
+    const event: Event = .{ .character = 'a' };
+    try testing.expectEqual(@as(u8, 'a'), event.character);
+}
+
+test "raw mode type has original termios field" {
+    const testing = std.testing;
+    try testing.expect(@hasField(RawMode, "original"));
+}
