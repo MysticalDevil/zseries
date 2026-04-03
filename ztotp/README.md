@@ -157,6 +157,13 @@ Key controls:
 - `Esc` to clear search
 - `q` to quit
 
+TUI diagnostics:
+
+- default log file: `.tmp-tui.log`
+- override file path with `--log-file <path>` or `ZTOTP_TUI_LOG`
+- set log level with `--log-level <trace|debug|info|warn|error>` or `ZLOG_LEVEL`
+- optionally mirror logs to the terminal with `--log-stdout`, `--log-stderr`, `ZLOG_STDOUT=1`, or `ZLOG_STDERR=1`
+
 ## Documentation
 
 - [`docs/usage.md`](docs/usage.md): day-to-day CLI usage

@@ -24,6 +24,11 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("../ztui/src/root.zig"),
         .target = target,
     });
+    const zlog_module = b.createModule(.{
+        .root_source_file = b.path("../zlog/src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
     const ztmpfile_module = b.createModule(.{
         .root_source_file = b.path("../ztmpfile/src/root.zig"),
         .target = target,
@@ -55,6 +60,7 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "zcli", .module = zcli_module },
             .{ .name = "ztui", .module = ztui_module },
+            .{ .name = "zlog", .module = zlog_module },
             .{ .name = "ztmpfile", .module = ztmpfile_module },
         },
     });
@@ -99,6 +105,7 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "ztotp", .module = mod },
                 .{ .name = "zcli", .module = zcli_module },
                 .{ .name = "ztui", .module = ztui_module },
+                .{ .name = "zlog", .module = zlog_module },
                 .{ .name = "ztmpfile", .module = ztmpfile_module },
             },
         }),

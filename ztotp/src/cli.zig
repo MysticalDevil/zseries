@@ -6,6 +6,7 @@ const importers = @import("importers.zig");
 const exporters = @import("exporters.zig");
 const input = @import("input.zig");
 const color = @import("zcli").color;
+const zlog = @import("zlog");
 const help = @import("cli/help.zig");
 const tui = @import("tui/mod.zig");
 
@@ -306,7 +307,33 @@ fn runTui(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Envi
     defer allocator.free(state.password);
     defer allocator.free(state.data_dir);
     defer state.vault.deinit();
-    tui.run(allocator, io, state.vault.payload.entries) catch |err| switch (err) {
+    var log_cfg = try zlog.config.fromEnv(allocator, env);
+    defer if (log_cfg.file_path) |path| allocator.free(path);
+    if (env.get("ZTOTP_TUI_LOG")) |value| {
+        if (log_cfg.file_path) |path| allocator.free(path);
+        log_cfg.file_path = try allocator.dupe(u8, value);
+    }
+    if (argValue(args, "--log-file")) |value| {
+        if (log_cfg.file_path) |path| allocator.free(path);
+        log_cfg.file_path = try allocator.dupe(u8, value);
+    }
+    if (log_cfg.file_path == null) {
+        log_cfg.file_path = try allocator.dupe(u8, ".tmp-tui.log");
+    }
+    if (argValue(args, "--log-level")) |value| {
+        log_cfg.level_value = zlog.Level.fromString(value) orelse .trace;
+    } else if (env.get("ZLOG_LEVEL") == null) {
+        log_cfg.level_value = .trace;
+    }
+    if (hasArg(args, "--log-stdout")) log_cfg.stdout_enabled = true;
+    if (hasArg(args, "--log-stderr")) log_cfg.stderr_enabled = true;
+
+    tui.run(allocator, io, state.vault.payload.entries, .{
+        .log_path = log_cfg.file_path,
+        .log_level = log_cfg.level_value,
+        .log_stdout = log_cfg.stdout_enabled,
+        .log_stderr = log_cfg.stderr_enabled,
+    }) catch |err| switch (err) {
         error.NotATerminal => {
             std.debug.print("ztotp tui requires an interactive TTY.\n", .{});
             return;

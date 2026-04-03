@@ -219,9 +219,21 @@ fn renderTuiHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
     try writeBullet(writer, use_color, "Esc", "Clear the search query");
     try writeBullet(writer, use_color, "q", "Quit the dashboard");
     try writer.writeAll("\n");
+    try writeHeading(writer, use_color, "Logging");
+    try writeBullet(writer, use_color, "--log-file <path>", "Write diagnostics to a file; defaults to .tmp-tui.log");
+    try writeBullet(writer, use_color, "--log-level <trace|debug|info|warn|error>", "Set the minimum log level; defaults to trace");
+    try writeBullet(writer, use_color, "--log-stdout / --log-stderr", "Mirror diagnostic logs to stdout or stderr");
+    try writeBullet(writer, use_color, "ZTOTP_TUI_LOG", "ztotp-specific log file override");
+    try writeBullet(writer, use_color, "ZLOG_*", "Generic zlog environment overrides shared with other tools");
+    try writer.writeAll("\n");
     try writeHeading(writer, use_color, "Layout");
     try writeBullet(writer, use_color, "TOTP", "Shows current codes and countdown cards");
     try writeBullet(writer, use_color, "Readonly", "Shows imported HOTP, Steam, and unknown entries in a separate section");
+    try writer.writeAll("\n");
+    try writeHeading(writer, use_color, "Examples");
+    try writeExample(writer, use_color, "ztotp tui");
+    try writeExample(writer, use_color, "ztotp tui --log-file .tmp-tui.log --log-level trace");
+    try writeExample(writer, use_color, "ZTOTP_TUI_LOG=.tmp-tui.log ZLOG_STDERR=1 ztotp tui");
     return out.toOwnedSlice();
 }
 

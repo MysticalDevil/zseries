@@ -20,6 +20,19 @@ pub const Partition = struct {
     }
 };
 
+pub const RenderedDashboard = struct {
+    frame: []u8,
+    width: usize,
+    height: usize,
+    totp_count: usize,
+    readonly_count: usize,
+    frame_hash: u64,
+
+    pub fn deinit(self: RenderedDashboard, allocator: std.mem.Allocator) void {
+        allocator.free(self.frame);
+    }
+};
+
 pub fn partitionAlloc(allocator: std.mem.Allocator, entries: []const model.Entry, query: []const u8) !Partition {
     var totp_indexes = std.ArrayList(usize).empty;
     defer totp_indexes.deinit(allocator);
@@ -112,7 +125,7 @@ fn drawSection(buf: *buffer.Buffer, allocator: std.mem.Allocator, entries: []con
     return start_y + sectionHeight(indexes.len, per_row, card_height);
 }
 
-pub fn renderDashboardAlloc(allocator: std.mem.Allocator, entries: []const model.Entry, query: []const u8, timestamp: i64) ![]u8 {
+pub fn renderDashboardAlloc(allocator: std.mem.Allocator, entries: []const model.Entry, query: []const u8, timestamp: i64) !RenderedDashboard {
     const partition = try partitionAlloc(allocator, entries, query);
     defer partition.deinit(allocator);
     const width = terminalWidth();
@@ -129,10 +142,14 @@ pub fn renderDashboardAlloc(allocator: std.mem.Allocator, entries: []const model
     const next_y = try drawSection(&buf, allocator, entries, partition.totp, "TOTP", 2, timestamp, width, false);
     _ = try drawSection(&buf, allocator, entries, partition.readonly, "Readonly", next_y + 1, timestamp, width, true);
     const frame = try buf.renderAlloc();
-    errdefer allocator.free(frame);
-    const prefix = try std.fmt.allocPrint(allocator, "\x1b[2J\x1b[H{s}", .{frame});
-    allocator.free(frame);
-    return prefix;
+    return .{
+        .frame = frame,
+        .width = width,
+        .height = height,
+        .totp_count = partition.totp.len,
+        .readonly_count = partition.readonly.len,
+        .frame_hash = std.hash.Wyhash.hash(0, frame),
+    };
 }
 
 test "partition separates totp and readonly" {
