@@ -68,17 +68,26 @@ fn writeExample(writer: anytype, use_color: bool, example: []const u8) !void {
 fn writeFormats(writer: anytype, use_color: bool) !void {
     try writeHeading(writer, use_color, "Formats");
     try writer.writeAll("  ");
-    try color.writeStyled(writer, use_color, .value, "otpauth");
-    try writer.writeAll(", ");
-    try color.writeStyled(writer, use_color, .value, "json");
-    try writer.writeAll(", ");
-    try color.writeStyled(writer, use_color, .value, "csv");
-    try writer.writeAll(", ");
-    try color.writeStyled(writer, use_color, .value, "aegis");
-    try writer.writeAll(", ");
-    try color.writeStyled(writer, use_color, .value, "aegis-encrypted");
-    try writer.writeAll(", ");
-    try color.writeStyled(writer, use_color, .value, "authy");
+    const formats = [_][]const u8{
+        "otpauth",
+        "json",
+        "csv",
+        "aegis",
+        "aegis-encrypted",
+        "authy",
+        "2fas",
+        "2fas-encrypted",
+        "andotp",
+        "andotp-encrypted",
+        "andotp-encrypted-old",
+        "bitwarden",
+        "proton-authenticator",
+        "ente-auth",
+    };
+    for (formats, 0..) |format, index| {
+        if (index > 0) try writer.writeAll(", ");
+        try color.writeStyled(writer, use_color, .value, format);
+    }
     try writer.writeAll("\n\n");
 }
 
@@ -173,7 +182,7 @@ fn renderListHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
     var out: std.Io.Writer.Allocating = .init(allocator);
     defer out.deinit();
     const writer = &out.writer;
-    try writeHeader(writer, use_color, "ztotp list", "List stored TOTP entries");
+    try writeHeader(writer, use_color, "ztotp list", "List stored entries, including readonly imported kinds");
     try writeHeading(writer, use_color, "Usage");
     try writeExample(writer, use_color, "ztotp list");
     return out.toOwnedSlice();
@@ -205,6 +214,7 @@ fn renderCodeHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
     try writeHeading(writer, use_color, "Notes");
     try writeBullet(writer, use_color, "query", "Matches id, issuer, or account text");
     try writeBullet(writer, use_color, "output", "Prints id, issuer, account, code, and remaining seconds");
+    try writeBullet(writer, use_color, "readonly kinds", "HOTP, Steam, and unknown entries are stored but rejected here");
     try writer.writeAll("\n");
     try writeHeading(writer, use_color, "Examples");
     try writeExample(writer, use_color, "ztotp code GitHub");
@@ -236,6 +246,7 @@ fn renderUpdateHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
     try writeBullet(writer, use_color, "--set-tags a,b,c", "Replace tags with a comma-separated list");
     try writeBullet(writer, use_color, "--clear-tags", "Remove all tags");
     try writeBullet(writer, use_color, "--note <text>", "Replace the note text");
+    try writeBullet(writer, use_color, "readonly entries", "Imported non-TOTP entries are currently read-only");
     try writer.writeAll("\n");
     try writeHeading(writer, use_color, "Examples");
     try writeExample(writer, use_color, "ztotp update --id entry-1700000000 --issuer GitHub --note primary");
@@ -265,12 +276,17 @@ fn renderImportHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
     try writeHeading(writer, use_color, "Notes");
     try writeBullet(writer, use_color, "aegis-encrypted", "Uses the current vault password to decrypt the backup");
     try writeBullet(writer, use_color, "authy", "Imports Authy authy-export compatible backup JSON");
-    try writeBullet(writer, use_color, "otpauth", "Skips unsupported HOTP and Steam tokens");
+    try writeBullet(writer, use_color, "otpauth", "Imports TOTP, HOTP, and Steam entries; non-TOTP entries become readonly");
+    try writeBullet(writer, use_color, "2fas / andotp", "Support plain and encrypted exports; non-TOTP entries are imported readonly");
+    try writeBullet(writer, use_color, "bitwarden / proton / ente", "Extract OTP entries from supported export files");
     try writer.writeAll("\n");
     try writeHeading(writer, use_color, "Examples");
     try writeExample(writer, use_color, "ztotp import --from aegis --file aegis_plain.json");
     try writeExample(writer, use_color, "ztotp import --from aegis-encrypted --file aegis_encrypted.json");
+    try writeExample(writer, use_color, "ztotp import --from 2fas-encrypted --file twofas.2fas");
+    try writeExample(writer, use_color, "ztotp import --from andotp-encrypted --file andotp.bin");
     try writeExample(writer, use_color, "ztotp import --from authy --file authy.json");
+    try writeExample(writer, use_color, "ztotp import --from bitwarden --file bitwarden.json");
     return out.toOwnedSlice();
 }
 
