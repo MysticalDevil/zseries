@@ -183,3 +183,82 @@ fn sectionHeight(count: usize, per_row: usize, card_height: usize) usize {
     const rows = @divFloor(count + per_row - 1, per_row);
     return 2 + rows * (card_height + 1);
 }
+
+fn testDrawCard(buf: *buffer.Buffer, rect: widgets.Rect, allocator: std.mem.Allocator, timestamp: i64, context: *anyopaque) !void {
+    _ = allocator;
+    _ = timestamp;
+    const text: *const []const u8 = @ptrCast(@alignCast(context));
+    buf.putText(rect.x, rect.y, text.*, .normal);
+}
+
+fn cellText(buf: *const buffer.Buffer, x: usize, y: usize) []const u8 {
+    const cell = buf.cells[y * buf.width + x];
+    return cell.bytes[0..cell.len];
+}
+
+test "cardsPerRow never returns less than one" {
+    try std.testing.expectEqual(@as(usize, 1), cardsPerRow(10, 2));
+}
+
+test "cardsPerRow uses width and gap" {
+    try std.testing.expectEqual(@as(usize, 2), cardsPerRow(80, 2));
+    try std.testing.expectEqual(@as(usize, 3), cardsPerRow(120, 2));
+}
+
+test "maxCardHeight returns tallest card" {
+    const label_a = "A";
+    const label_b = "B";
+    const cards = [_]Card{
+        .{ .width = 10, .height = 3, .drawFn = testDrawCard, .context = @ptrCast(@constCast(&label_a)) },
+        .{ .width = 10, .height = 5, .drawFn = testDrawCard, .context = @ptrCast(@constCast(&label_b)) },
+    };
+
+    try std.testing.expectEqual(@as(usize, 5), maxCardHeight(&cards));
+}
+
+test "sectionHeight handles empty and multi-row layouts" {
+    try std.testing.expectEqual(@as(usize, 3), sectionHeight(0, 2, 4));
+    try std.testing.expectEqual(@as(usize, 7), sectionHeight(2, 2, 4));
+    try std.testing.expectEqual(@as(usize, 12), sectionHeight(3, 2, 4));
+}
+
+test "drawSection shows no entries placeholder for empty sections" {
+    const testing = std.testing;
+    var dash = Dashboard.init(testing.allocator, std.Io.Threaded.global_single_threaded.io(), .{});
+    defer dash.deinit();
+
+    var buf = try buffer.Buffer.init(testing.allocator, 40, 6);
+    defer buf.deinit();
+
+    const next_y = try dash.drawSection(&buf, .{ .title = "Empty", .cards = &.{} }, 1, 40);
+
+    try testing.expectEqual(@as(usize, 4), next_y);
+    try testing.expectEqualStrings("E", cellText(&buf, 0, 1));
+    try testing.expectEqualStrings("(", cellText(&buf, 6, 1));
+    try testing.expectEqualStrings("n", cellText(&buf, 2, 3));
+}
+
+test "drawSection lays out cards across rows" {
+    const testing = std.testing;
+    var dash = Dashboard.init(testing.allocator, std.Io.Threaded.global_single_threaded.io(), .{ .card_gap = 2 });
+    defer dash.deinit();
+
+    const card_a_text = "A";
+    const card_b_text = "B";
+    const card_c_text = "C";
+    const cards = [_]Card{
+        .{ .width = 36, .height = 3, .drawFn = testDrawCard, .context = @ptrCast(@constCast(&card_a_text)) },
+        .{ .width = 36, .height = 3, .drawFn = testDrawCard, .context = @ptrCast(@constCast(&card_b_text)) },
+        .{ .width = 36, .height = 3, .drawFn = testDrawCard, .context = @ptrCast(@constCast(&card_c_text)) },
+    };
+
+    var buf = try buffer.Buffer.init(testing.allocator, 80, 12);
+    defer buf.deinit();
+
+    const next_y = try dash.drawSection(&buf, .{ .title = "Cards", .cards = &cards }, 0, 80);
+
+    try testing.expectEqual(@as(usize, 10), next_y);
+    try testing.expectEqualStrings("A", cellText(&buf, 0, 2));
+    try testing.expectEqualStrings("B", cellText(&buf, 38, 2));
+    try testing.expectEqualStrings("C", cellText(&buf, 0, 6));
+}
