@@ -82,3 +82,20 @@ test "logger filters lower levels" {
     try testing.expect(std.mem.indexOf(u8, bytes, "keep me") != null);
     try testing.expect(std.mem.indexOf(u8, bytes, "skip me") == null);
 }
+
+test "logger logs messages at the configured minimum level" {
+    const testing = std.testing;
+    const io = std.Io.Threaded.init_single_threaded;
+    var logger = Logger.init(testing.allocator, io, .info);
+    defer logger.deinit();
+    try logger.addFileSink(".tmp-zlog-min-level.log");
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-min-level.log") catch {};
+
+    try logger.log(.info, "boundary hit", &.{field.Field.string("scope", "main")});
+
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, ".tmp-zlog-min-level.log", testing.allocator, .limited(4096));
+    defer testing.allocator.free(bytes);
+
+    try testing.expect(std.mem.indexOf(u8, bytes, "boundary hit") != null);
+    try testing.expect(std.mem.indexOf(u8, bytes, "scope=main") != null);
+}

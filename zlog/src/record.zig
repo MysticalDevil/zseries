@@ -36,3 +36,17 @@ test "record formatting includes message and fields" {
     try testing.expect(std.mem.indexOf(u8, text, "msg=\"frame rendered\"") != null);
     try testing.expect(std.mem.indexOf(u8, text, "frame=7") != null);
 }
+
+test "record formatting without extra fields still ends with newline" {
+    const testing = std.testing;
+    const rec = Record{
+        .timestamp = 7,
+        .level_value = .warn,
+        .message = "disk-full",
+    };
+
+    const text = try rec.formatAlloc(testing.allocator);
+    defer testing.allocator.free(text);
+
+    try testing.expectEqualStrings("ts=7 level=WARN msg=disk-full\n", text);
+}

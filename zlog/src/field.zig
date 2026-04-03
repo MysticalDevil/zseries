@@ -68,3 +68,15 @@ test "field formatting emits escaped key value pairs" {
     defer testing.allocator.free(text);
     try testing.expectEqualStrings("msg=\"hello world\" changed=true", text);
 }
+
+test "field formatting escapes control characters and quotes" {
+    const testing = std.testing;
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+
+    try appendField(&out.writer, Field.string("msg", "line\n\t\"quoted\""));
+
+    const text = try out.toOwnedSlice();
+    defer testing.allocator.free(text);
+    try testing.expectEqualStrings("msg=\"line\\n\\t\\\"quoted\\\"\"", text);
+}

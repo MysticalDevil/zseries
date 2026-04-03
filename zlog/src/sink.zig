@@ -98,3 +98,21 @@ test "file sink writes and flushes" {
     try testing.expect(std.mem.indexOf(u8, bytes, "hello") != null);
     sink.deinit();
 }
+
+test "file sink appends sequential writes" {
+    const testing = std.testing;
+    const io = std.Io.Threaded.init_single_threaded;
+    var file_sink = try FileSink.initPath(io, ".tmp-zlog-sink-append.log");
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-sink-append.log") catch {};
+    const sink = file_sink.sink();
+
+    try sink.write("first\n");
+    try sink.write("second\n");
+    try sink.flush();
+
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io, ".tmp-zlog-sink-append.log", testing.allocator, .limited(4096));
+    defer testing.allocator.free(bytes);
+
+    try testing.expect(std.mem.indexOf(u8, bytes, "first\nsecond\n") != null);
+    sink.deinit();
+}

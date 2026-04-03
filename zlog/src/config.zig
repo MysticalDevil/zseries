@@ -39,3 +39,21 @@ test "config parses environment" {
     try testing.expectEqualStrings("/tmp/test.log", cfg.file_path.?);
     try testing.expect(cfg.stderr_enabled);
 }
+
+test "config falls back on invalid values and keeps defaults" {
+    const testing = std.testing;
+    var arena = std.heap.ArenaAllocator.init(testing.allocator);
+    defer arena.deinit();
+    var env = std.process.Environ.Map.init(arena.allocator());
+    defer env.deinit(arena.allocator());
+    try env.put(arena.allocator(), "ZLOG_LEVEL", "verbose-ish");
+    try env.put(arena.allocator(), "ZLOG_STDOUT", "TRUE");
+    try env.put(arena.allocator(), "ZLOG_STDERR", "0");
+
+    const cfg = try fromEnv(arena.allocator(), &env);
+
+    try testing.expectEqual(level.Level.info, cfg.level_value);
+    try testing.expect(cfg.stdout_enabled);
+    try testing.expect(!cfg.stderr_enabled);
+    try testing.expectEqual(@as(?[]const u8, null), cfg.file_path);
+}
