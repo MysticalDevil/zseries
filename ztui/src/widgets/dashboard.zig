@@ -77,7 +77,7 @@ pub const Dashboard = struct {
                 last_size = current_size;
             }
 
-            switch (try input_mod.readEvent(self.config.refresh_ms)) {
+            switch (try input_mod.readEvent(@intCast(self.config.refresh_ms))) {
                 .none => continue,
                 .quit => break,
                 .clear_search => self.query.clearRetainingCapacity(),
