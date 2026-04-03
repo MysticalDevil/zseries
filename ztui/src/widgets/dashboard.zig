@@ -57,6 +57,7 @@ pub const Dashboard = struct {
 
         var last_hash: ?u64 = null;
         var last_size: ?u64 = null;
+        var need_clear = true;
 
         while (true) {
             const frame = try self.renderFrame();
@@ -67,8 +68,9 @@ pub const Dashboard = struct {
             const size_changed = last_size == null or last_size.? != current_size;
 
             if (changed) {
-                if (size_changed) {
+                if (need_clear or size_changed) {
                     try terminal.clearScreen();
+                    need_clear = false;
                 } else {
                     try terminal.homeCursor();
                 }
