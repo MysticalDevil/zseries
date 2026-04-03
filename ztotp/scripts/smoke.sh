@@ -12,6 +12,7 @@ set -eu
 
 keep=0
 run_tui=0
+stress=0
 password="test"
 status_build="pending"
 status_init="pending"
@@ -97,6 +98,9 @@ while [ "$#" -gt 0 ]; do
         --tui)
             run_tui=1
             ;;
+        --stress)
+            stress=1
+            ;;
         --password)
             shift
             if [ "$#" -eq 0 ]; then
@@ -105,7 +109,7 @@ while [ "$#" -gt 0 ]; do
             password="$1"
             ;;
         -h|--help)
-            printf '%s\n' "Usage: ./scripts/smoke.sh [--keep] [--tui] [--password VALUE]"
+            printf '%s\n' "Usage: ./scripts/smoke.sh [--keep] [--tui] [--stress] [--password VALUE]"
             exit 0
             ;;
         *)
@@ -121,6 +125,8 @@ data_root="$tmp_root/data"
 json_export="$tmp_root/backup.json"
 csv_export="$tmp_root/backup.csv"
 otpauth_export="$tmp_root/backup.txt"
+seed_otpauth="$tmp_root/seed-otpauth.txt"
+stress_otpauth="$tmp_root/stress-otpauth.txt"
 
 cleanup() {
     if [ "$keep" -eq 0 ]; then
@@ -134,9 +140,11 @@ title "ztotp smoke"
 info "Current directory: $repo_root"
 info "Temporary data root: $tmp_root"
 info "Seed entries:"
-printf '  - GitHub / SHA1 / 6 digits / 30s\n'
-printf '  - OpenAI / SHA256 / 8 digits / 30s\n'
-printf '  - Internal / SHA512 / 6 digits / 60s\n'
+printf '  - 16 built-in TOTP entries across SHA1 / SHA256 / SHA512\n'
+printf '  - 3 readonly fixtures via local otpauth import (2 HOTP + 1 Steam)\n'
+if [ "$stress" -eq 1 ]; then
+    printf '  - 12 extra generated TOTP entries for TUI stress coverage\n'
+fi
 
 section "Build"
 run_checked "zig build" zig build
@@ -151,17 +159,95 @@ run_ztotp() {
     XDG_DATA_HOME="$data_root" ZTOTP_PASSWORD="$password" "$repo_root/zig-out/bin/ztotp" "$@"
 }
 
+seed_entry() {
+    issuer="$1"
+    account="$2"
+    secret="$3"
+    digits="$4"
+    period="$5"
+    algorithm="$6"
+    tag="$7"
+
+    run_ztotp add \
+        --issuer "$issuer" \
+        --account "$account" \
+        --secret "$secret" \
+        --digits "$digits" \
+        --period "$period" \
+        --algorithm "$algorithm" \
+        --tag "$tag"
+    ok "Added $issuer / $account"
+}
+
+seed_builtin_entries() {
+    seed_entry "GitHub" "alice@example.com" "JBSWY3DPEHPK3PXP" 6 30 SHA1 work
+    seed_entry "OpenAI" "team@example.com" "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ" 8 30 SHA256 prod
+    seed_entry "Internal" "ops@example.com" "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA====" 6 60 SHA512 infra
+    seed_entry "GitLab" "platform@example.com" "MFRGGZDFMZTWQ2LK" 6 30 SHA1 work
+    seed_entry "Bitwarden" "vault@example.com" "MZXW6YTBOI" 6 30 SHA1 vault
+    seed_entry "Proton" "mail@example.com" "ONSWG4TFOQ" 6 30 SHA1 mail
+    seed_entry "Cloudflare" "edge@example.com" "MZXW6YTBOJTG633C" 8 45 SHA256 edge
+    seed_entry "Grafana" "alerts@example.com" "KRUGS4ZAON2HE2LOM4" 6 30 SHA1 obs
+    seed_entry "Sentry" "errors@example.com" "NRXW4ZDJNZTSA5DIMU" 6 30 SHA1 obs
+    seed_entry "Linear" "pm@example.com" "OJQW4YLSN5XGOIDBOI" 6 30 SHA1 ops
+    seed_entry "Vercel" "deploy@example.com" "NZXW6YTBONSWG4TFORQQ" 6 30 SHA1 deploy
+    seed_entry "Scale" "batch@example.com" "KRSXG5DSNFXGOIDBNRUWG" 6 30 SHA1 batch
+    seed_entry "PagerDuty" "oncall@example.com" "M5XW6YTBOJSWG5DF" 6 30 SHA1 ops
+    seed_entry "Datadog" "metrics@example.com" "MZXW6YTBORQW4ZBA" 6 30 SHA1 obs
+    seed_entry "Slack" "chat@example.com" "MFZG65DIMVZG63TH" 6 30 SHA1 comms
+    seed_entry "Figma" "design@example.com" "INXW24DMMV4HI2LO" 6 30 SHA1 design
+}
+
+seed_readonly_entries() {
+    cat > "$seed_otpauth" <<'EOF'
+otpauth://hotp/Issuu:James?secret=YOOMIXWS5GN6RTBPUFFWKTW5M4&issuer=Issuu&algorithm=SHA1&digits=6&counter=1
+otpauth://hotp/Nozbe:David?secret=MNUGC3DVMRZXIYJAONUGC4TF&issuer=Nozbe&algorithm=SHA1&digits=8&counter=7
+steam://NB2W45DFOIZA====
+EOF
+    run_ztotp import --from otpauth --file "$seed_otpauth"
+    ok "Imported readonly HOTP and Steam fixtures"
+}
+
+seed_stress_entries() {
+    : > "$stress_otpauth"
+    i=1
+    while [ "$i" -le 12 ]; do
+        suffix=$(printf '%02d' "$i")
+        case $((i % 3)) in
+            0)
+                algorithm="SHA512"
+                digits=6
+                period=60
+                ;;
+            1)
+                algorithm="SHA1"
+                digits=6
+                period=30
+                ;;
+            2)
+                algorithm="SHA256"
+                digits=8
+                period=45
+                ;;
+        esac
+        printf 'otpauth://totp/Demo%s:user%s@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Demo%s&algorithm=%s&digits=%s&period=%s\n' \
+            "$suffix" "$suffix" "$suffix" "$algorithm" "$digits" "$period" >> "$stress_otpauth"
+        i=$((i + 1))
+    done
+    run_ztotp import --from otpauth --file "$stress_otpauth"
+    ok "Imported 12 extra stress entries"
+}
+
 section "Init"
 run_checked "initialize temporary vault" run_ztotp init
 status_init="pass"
 
 section "Add Entries"
-run_ztotp add --issuer GitHub --account alice@example.com --secret JBSWY3DPEHPK3PXP --tag work
-ok "Added GitHub / alice@example.com"
-run_ztotp add --issuer OpenAI --account team@example.com --secret GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ --algorithm SHA256 --digits 8 --tag prod
-ok "Added OpenAI / team@example.com"
-run_ztotp add --issuer Internal --account ops@example.com --secret GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA==== --algorithm SHA512 --period 60 --tag infra
-ok "Added Internal / ops@example.com"
+seed_builtin_entries
+seed_readonly_entries
+if [ "$stress" -eq 1 ]; then
+    seed_stress_entries
+fi
 status_add="pass"
 
 section "List"
@@ -171,9 +257,18 @@ section "Search"
 run_ztotp search --issuer GitHub
 ok "Search returned GitHub entries"
 
+section "Readonly Search"
+run_ztotp search --issuer Issuu
+ok "Readonly imported entries are visible"
+
 section "Code"
 run_ztotp code GitHub
 ok "Generated a live code"
+step "validate readonly rejection"
+if run_ztotp code Issuu >/dev/null 2>&1; then
+    fail "readonly code generation unexpectedly succeeded"
+fi
+ok "Readonly entry rejected by code command as expected"
 status_query="pass"
 
 section "Update"
