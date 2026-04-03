@@ -1,20 +1,102 @@
 # zseries
 
-`zseries` is a Zig workspace for applications, reusable libraries, and terminal tooling.
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE) ![Zig](https://img.shields.io/badge/Zig-0.16.0_dev-F7A41D?logo=zig&logoColor=white)
 
-## GitHub Description
+A Zig workspace for applications, reusable libraries, and terminal tooling.
 
-Suggested repository description:
+## Features
 
-`A Zig workspace for applications, reusable libraries, and terminal tooling.`
+- **ztotp** — Local-first encrypted TOTP authenticator with import/export support
+- **Modular Libraries** — Reusable CLI, TUI, logging, and tempfile primitives
+- **Terminal-First** — All tools designed for efficient keyboard-driven workflows
+- **Cross-Platform** — Linux, macOS, Windows, and WASI support
 
 ## Projects
 
-- `ztotp/`: local-first encrypted TOTP application
-- `zcli/`: shared CLI styling and help-formatting primitives
-- `ztui/`: shared TUI buffer, terminal, and widget primitives
-- `zlog/`: reusable structured logging primitives
-- `ztmpfile/`: temporary file utility project
+| Project | Type | Description | Status |
+| ------- | ---- | ----------- | ------ |
+| [ztotp](ztotp/) | Application | Local-first encrypted TOTP CLI with TUI dashboard | Active |
+| [zcli](zcli/) | Library | Shared CLI styling and help-formatting primitives | Stable |
+| [ztui](ztui/) | Library | Shared TUI buffer, terminal, and widget primitives | Stable |
+| [zlog](zlog/) | Library | Structured logging with levels and multiple sinks | Stable |
+| [ztmpfile](ztmpfile/) | Library | Cross-platform temp file/dir with C ABI support | Stable |
+
+## Quick Start
+
+### Prerequisites
+
+- [Zig](https://ziglang.org/) 0.16.0-dev or later
+- [just](https://github.com/casey/just) (optional, for workspace commands)
+
+### Build ztotp (Main Application)
+
+```bash
+cd ztotp
+zig build
+
+# Run tests
+zig build test
+
+# Quick smoke test
+./scripts/smoke.sh
+```
+
+### Using ztotp
+
+```bash
+# Initialize vault
+./zig-out/bin/ztotp init
+
+# Add a TOTP entry
+./zig-out/bin/ztotp add --issuer GitHub --account alice@example.com --secret JBSWY3DPEHPK3PXP
+
+# Show current code
+./zig-out/bin/ztotp code GitHub
+
+# Launch TUI dashboard
+./zig-out/bin/ztotp tui
+```
+
+## Workspace Commands
+
+The root `justfile` provides common workspace tasks:
+
+```bash
+just list-projects   # List all projects
+just check          # Run Markdown checks + build/test all projects
+just fmt            # Format Markdown and Zig source
+just clean          # Remove build caches and artifacts
+just smoke          # Run ztotp smoke tests
+```
+
+## Build Individual Projects
+
+```bash
+cd zcli && zig build
+cd ../ztui && zig build
+cd ../zlog && zig build test
+cd ../ztmpfile && zig build test
+cd ../ztotp && zig build test
+```
+
+## Project Layout
+
+Each child project keeps its own build metadata and source tree:
+
+```text
+project/
+├── build.zig
+├── build.zig.zon
+├── src/
+└── README.md
+```
+
+Shared workspace files at the root:
+
+- `README.md` — This file
+- `LICENSE` — MIT license
+- `.gitignore` — Recursive ignore rules
+- `justfile` — Workspace automation
 
 ## Shared Workspace Files
 
@@ -25,58 +107,6 @@ These files are intentionally shared at the workspace root:
 - `.gitignore`: recursive ignore rules for all child projects
 - `.rumdl.toml`: shared Markdown lint configuration
 
-## Layout
-
-Each child project keeps its own build metadata and source tree.
-
-- `build.zig`
-- `build.zig.zon`
-- `src/`
-
-The application-specific README for the TOTP tool remains in `ztotp/README.md`.
-
-Each child project may keep its own README and LICENSE when it is useful to
-publish or consume that project independently.
-
-## Build
-
-Build a child project from inside its directory. For example:
-
-```bash
-cd ztotp
-zig build
-zig build test
-```
-
-Other projects:
-
-```bash
-cd zcli && zig build
-cd ../ztui && zig build
-cd ../zlog && zig build test
-cd ../ztmpfile && zig build test
-```
-
-## Workspace Commands
-
-The root `justfile` provides common workspace tasks:
-
-```bash
-just list-projects
-just check
-just fmt
-just clean
-just smoke
-just smoke -- --keep
-```
-
-Task overview:
-
-- `just check`: run shared Markdown checks plus child build/test commands
-- `just fmt`: format shared Markdown and Zig source trees
-- `just clean`: remove child build caches and smoke artifacts
-- `just smoke`: run `ztotp/scripts/smoke.sh` from the workspace root
-
 ## License
 
-MIT. See `LICENSE`.
+MIT. See [LICENSE](LICENSE).
