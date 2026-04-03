@@ -4,6 +4,12 @@
 
 A Zig workspace for applications and reusable libraries.
 
+## Library Consumption
+
+The reusable libraries in this repository currently live inside the `zseries` monorepo.
+
+For third-party projects, vendor the library directory you want to consume and depend on it with a local `.path` entry such as `vendor/ztmpfile`. A monorepo archive URL does not work directly with Zig package fetch because the package root must contain `build.zig.zon`.
+
 ## Projects
 
 | Project | Type | Description |

@@ -29,6 +29,7 @@ Vendor the `ztmpfile/` directory into your project, then add the dependency in `
 **Import in code**:
 
 ```zig
+const std = @import("std");
 const ztmpfile = @import("ztmpfile");
 
 // Temporary directory
@@ -39,12 +40,19 @@ defer dir.deinit(); // Cleanup on scope exit
 var file = try ztmpfile.tempfile(allocator);
 defer file.deinit();
 
+const io = std.Io.Threaded.global_single_threaded.io();
+var write_buffer: [256]u8 = undefined;
+var writer = file.file().writer(io, &write_buffer);
+try writer.interface.writeAll("hello\n");
+try writer.interface.flush();
+
 // Builder pattern
-var dir2 = try ztmpfile.TempDir.Builder.init()
+var builder = ztmpfile.Builder.init();
+var dir2 = try builder
     .prefix("myapp_")
     .suffix("_tmp")
     .inDir("/var/tmp")
-    .create(allocator);
+    .tempDir(allocator);
 defer dir2.deinit();
 ```
 
