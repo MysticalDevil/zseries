@@ -2,7 +2,9 @@ const std = @import("std");
 const model = @import("model.zig");
 const storage = @import("storage.zig");
 const totp = @import("totp.zig");
-const import_export = @import("import_export.zig");
+const importers = @import("importers.zig");
+const exporters = @import("exporters.zig");
+const input = @import("input.zig");
 
 pub const CommandError = error{ InvalidArgs, EntryNotFound, VaultAlreadyExists, VaultMissing };
 
@@ -22,6 +24,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
     if (std.mem.eql(u8, command, "list")) return runList(allocator, io, env, args[2..]);
     if (std.mem.eql(u8, command, "search")) return runSearch(allocator, io, env, args[2..]);
     if (std.mem.eql(u8, command, "code")) return runCode(allocator, io, env, args[2..]);
+    if (std.mem.eql(u8, command, "update")) return runUpdate(allocator, io, env, args[2..]);
     if (std.mem.eql(u8, command, "remove")) return runRemove(allocator, io, env, args[2..]);
     if (std.mem.eql(u8, command, "export")) return runExport(allocator, io, env, args[2..]);
     if (std.mem.eql(u8, command, "import")) return runImport(allocator, io, env, args[2..]);
@@ -37,9 +40,10 @@ fn printHelp() !void {
             "  list [--password PASS]\n" ++
             "  search [--issuer NAME] [--account NAME] [--tag TAG] [--password PASS]\n" ++
             "  code (--id ID | QUERY) [--password PASS]\n" ++
+            "  update [--id ID] [--issuer NAME] [--account NAME] [--query TEXT] [--secret SECRET] [--digits N] [--period N] [--algorithm SHA1] [--set-tags a,b] [--clear-tags] [--note TEXT] [--password PASS]\n" ++
             "  remove --id ID [--password PASS]\n" ++
-            "  import --from (otpauth|json|csv) --file PATH [--password PASS]\n" ++
-            "  export --to (otpauth|json|csv) --file PATH [--password PASS]\n" ++
+            "  import --from (otpauth|json|csv|aegis|aegis-encrypted|authy|authy-otpauth) --file PATH [--password PASS]\n" ++
+            "  export --to (otpauth|json|csv|aegis|aegis-encrypted|authy|authy-otpauth) --file PATH [--password PASS]\n" ++
             "Password sources: --password, ZTOTP_PASSWORD, stdin prompt\n",
         .{},
     );
@@ -56,6 +60,13 @@ fn argValue(args: []const []const u8, name: []const u8) ?[]const u8 {
     return null;
 }
 
+fn hasArg(args: []const []const u8, name: []const u8) bool {
+    for (args) |arg| {
+        if (std.mem.eql(u8, arg, name)) return true;
+    }
+    return false;
+}
+
 fn collectRepeatedArgs(allocator: std.mem.Allocator, args: []const []const u8, name: []const u8) ![]const []const u8 {
     var list = std.ArrayList([]const u8).empty;
     defer list.deinit(allocator);
@@ -68,18 +79,10 @@ fn collectRepeatedArgs(allocator: std.mem.Allocator, args: []const []const u8, n
     return list.toOwnedSlice(allocator);
 }
 
-fn promptLine(allocator: std.mem.Allocator, io: std.Io, prompt: []const u8) ![]const u8 {
-    std.debug.print("{s}", .{prompt});
-    var buffer: [1024]u8 = undefined;
-    var reader = std.Io.File.stdin().reader(io, &buffer);
-    const line = (try reader.interface.takeDelimiter('\n')) orelse return error.EndOfStream;
-    return try allocator.dupe(u8, std.mem.trim(u8, line, "\r"));
-}
-
 fn passwordForCommand(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) ![]const u8 {
     if (argValue(args, "--password")) |password| return try allocator.dupe(u8, password);
     if (env.get("ZTOTP_PASSWORD")) |password| return try allocator.dupe(u8, password);
-    return promptLine(allocator, io, "Master password: ");
+    return input.promptPassword(allocator, io, "Master password: ");
 }
 
 fn dataDirForCommand(allocator: std.mem.Allocator, env: *const std.process.Environ.Map) ![]const u8 {
@@ -184,6 +187,47 @@ fn matchEntry(entry: model.Entry, issuer: ?[]const u8, account: ?[]const u8, tag
     return true;
 }
 
+fn matchQuery(entry: model.Entry, query: ?[]const u8) bool {
+    const value = query orelse return true;
+    return std.mem.indexOf(u8, entry.id, value) != null or
+        std.mem.indexOf(u8, entry.issuer, value) != null or
+        std.mem.indexOf(u8, entry.account_name, value) != null;
+}
+
+fn collectMatchIndexes(allocator: std.mem.Allocator, entries: []const model.Entry, issuer: ?[]const u8, account: ?[]const u8, tag: ?[]const u8, query: ?[]const u8) ![]usize {
+    var matches = std.ArrayList(usize).empty;
+    defer matches.deinit(allocator);
+    for (entries, 0..) |entry, idx| {
+        if (!matchEntry(entry, issuer, account, tag)) continue;
+        if (!matchQuery(entry, query)) continue;
+        try matches.append(allocator, idx);
+    }
+    return matches.toOwnedSlice(allocator);
+}
+
+fn resolveInteractiveEntryIndex(allocator: std.mem.Allocator, io: std.Io, entries: []const model.Entry, args: []const []const u8) !usize {
+    if (argValue(args, "--id")) |id| {
+        for (entries, 0..) |entry, idx| if (std.mem.eql(u8, entry.id, id)) return idx;
+        return error.EntryNotFound;
+    }
+
+    const query = argValue(args, "--query");
+    const issuer = if (query == null) argValue(args, "--issuer") else null;
+    const account = if (query == null) argValue(args, "--account") else null;
+    const tag = argValue(args, "--tag");
+    const matches = try collectMatchIndexes(allocator, entries, issuer, account, tag, query);
+    defer allocator.free(matches);
+    if (matches.len == 0) return error.EntryNotFound;
+    if (matches.len == 1) return matches[0];
+
+    for (matches, 0..) |match, index| {
+        const entry = entries[match];
+        std.debug.print("{d}. {s}\t{s}\t{s}\n", .{ index + 1, entry.id, entry.issuer, entry.account_name });
+    }
+    const picked = try input.chooseIndex(allocator, io, matches.len, "Select entry: ");
+    return matches[picked];
+}
+
 fn runSearch(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) !void {
     var state = try loadEntries(allocator, io, env, args);
     defer allocator.free(state.password);
@@ -220,6 +264,46 @@ fn runCode(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
     const entry = resolveEntry(state.vault.payload.entries, query) orelse return error.EntryNotFound;
     const code = try totp.generate(allocator, entry, nowTimestamp(io));
     std.debug.print("{s}\t{s}\t{s}\t{s}\t{d}s\n", .{ entry.id, entry.issuer, entry.account_name, code.code[8 - code.len ..], code.remaining_seconds });
+}
+
+fn splitTagsAlloc(allocator: std.mem.Allocator, raw: []const u8) ![]const []const u8 {
+    var list = std.ArrayList([]const u8).empty;
+    defer list.deinit(allocator);
+    var it = std.mem.splitScalar(u8, raw, ',');
+    while (it.next()) |tag| {
+        const trimmed = std.mem.trim(u8, tag, " ");
+        if (trimmed.len == 0) continue;
+        try list.append(allocator, try allocator.dupe(u8, trimmed));
+    }
+    return list.toOwnedSlice(allocator);
+}
+
+fn runUpdate(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) !void {
+    var state = try loadEntries(allocator, io, env, args);
+    defer allocator.free(state.password);
+    defer allocator.free(state.data_dir);
+    defer state.vault.deinit();
+
+    const idx = try resolveInteractiveEntryIndex(allocator, io, state.vault.payload.entries, args);
+    var entries = std.ArrayList(model.Entry).empty;
+    defer entries.deinit(allocator);
+    try entries.appendSlice(allocator, state.vault.payload.entries);
+
+    var entry = entries.items[idx];
+    if (argValue(args, "--issuer")) |value| entry.issuer = try allocator.dupe(u8, value);
+    if (argValue(args, "--account")) |value| entry.account_name = try allocator.dupe(u8, value);
+    if (argValue(args, "--secret")) |value| entry.secret = try allocator.dupe(u8, value);
+    if (argValue(args, "--digits")) |value| entry.digits = try std.fmt.parseInt(u8, value, 10);
+    if (argValue(args, "--period")) |value| entry.period = try std.fmt.parseInt(u32, value, 10);
+    if (argValue(args, "--algorithm")) |value| entry.algorithm = model.Algorithm.fromString(value) orelse return error.InvalidArgs;
+    if (hasArg(args, "--clear-tags")) entry.tags = &.{};
+    if (argValue(args, "--set-tags")) |value| entry.tags = try splitTagsAlloc(allocator, value);
+    if (argValue(args, "--note")) |value| entry.note = try allocator.dupe(u8, value);
+    entry.updated_at = nowTimestamp(io);
+    entries.items[idx] = entry;
+
+    try saveEntries(allocator, io, state.data_dir, state.password, try entries.toOwnedSlice(allocator));
+    std.debug.print("Updated {s}\n", .{entry.id});
 }
 
 fn runRemove(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) !void {
@@ -261,11 +345,19 @@ fn runExport(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     const path = argValue(args, "--file") orelse return error.InvalidArgs;
 
     const bytes = if (std.mem.eql(u8, format, "json"))
-        try import_export.exportJson(allocator, state.vault.payload.entries, nowTimestamp(io))
+        try exporters.json(allocator, state.vault.payload.entries, nowTimestamp(io))
     else if (std.mem.eql(u8, format, "csv"))
-        try import_export.exportCsv(allocator, state.vault.payload.entries)
+        try exporters.csv(allocator, state.vault.payload.entries)
     else if (std.mem.eql(u8, format, "otpauth"))
-        try import_export.exportOtpAuth(allocator, state.vault.payload.entries)
+        try exporters.otpauth(allocator, state.vault.payload.entries)
+    else if (std.mem.eql(u8, format, "authy-otpauth"))
+        try exporters.otpauth(allocator, state.vault.payload.entries)
+    else if (std.mem.eql(u8, format, "aegis"))
+        try exporters.third_party.aegis_plain(allocator, io, state.vault.payload.entries)
+    else if (std.mem.eql(u8, format, "aegis-encrypted"))
+        try exporters.third_party.aegis_encrypted(allocator, io, state.vault.payload.entries, state.password)
+    else if (std.mem.eql(u8, format, "authy"))
+        try exporters.third_party.authy_backup(allocator, io, state.vault.payload.entries, state.password)
     else
         return error.InvalidArgs;
     defer allocator.free(bytes);
@@ -285,11 +377,19 @@ fn runImport(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.E
     const bytes = try loadFileAlloc(allocator, io, path);
     defer allocator.free(bytes);
     const imported = if (std.mem.eql(u8, format, "json"))
-        try import_export.importJson(allocator, bytes)
+        try importers.json(allocator, bytes)
     else if (std.mem.eql(u8, format, "csv"))
-        try import_export.importCsv(allocator, bytes)
+        try importers.csv(allocator, bytes)
     else if (std.mem.eql(u8, format, "otpauth"))
-        try import_export.importOtpAuth(allocator, bytes, nowTimestamp(io))
+        try importers.otpauth(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "authy-otpauth"))
+        try importers.otpauth(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "aegis"))
+        try importers.third_party.aegis_plain(allocator, bytes, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "aegis-encrypted"))
+        try importers.third_party.aegis_encrypted(allocator, bytes, state.password, nowTimestamp(io))
+    else if (std.mem.eql(u8, format, "authy"))
+        try importers.third_party.authy_backup(allocator, bytes, state.password, nowTimestamp(io))
     else
         return error.InvalidArgs;
 
