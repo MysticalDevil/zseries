@@ -14,15 +14,18 @@ Cross-platform temp file/dir library with optional C ABI.
 
 ## Usage
 
-Add to `build.zig.zon`:
+**Add dependency** (in `build.zig.zon`):
 
 ```zig
 .dependencies = .{
-    .ztmpfile = .{ .path = "../ztmpfile" },
+    .ztmpfile = .{
+        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
+        .hash = "<package-hash>",
+    },
 },
 ```
 
-Then use:
+**Import in code**:
 
 ```zig
 const ztmpfile = @import("ztmpfile");

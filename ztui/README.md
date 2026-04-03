@@ -15,15 +15,18 @@ Shared TUI primitives for Zig terminal applications.
 
 ## Usage
 
-Add to `build.zig.zon`:
+**Add dependency** (in `build.zig.zon`):
 
 ```zig
 .dependencies = .{
-    .ztui = .{ .path = "../ztui" },
+    .ztui = .{
+        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
+        .hash = "<package-hash>",
+    },
 },
 ```
 
-Then import:
+**Import in code**:
 
 ```zig
 const ztui = @import("ztui");

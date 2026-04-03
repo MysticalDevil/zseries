@@ -14,15 +14,18 @@ Structured logging with levels and multiple sinks for Zig projects.
 
 ## Usage
 
-Add to `build.zig.zon`:
+**Add dependency** (in `build.zig.zon`):
 
 ```zig
 .dependencies = .{
-    .zlog = .{ .path = "../zlog" },
+    .zlog = .{
+        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
+        .hash = "<package-hash>",
+    },
 },
 ```
 
-Then import:
+**Import in code**:
 
 ```zig
 const zlog = @import("zlog");
