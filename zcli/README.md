@@ -20,8 +20,8 @@ Shared CLI styling and help-formatting primitives for Zig projects.
 ```zig
 .dependencies = .{
     .zcli = .{
-        .url = "https://github.com/MysticalDevil/zseries/archive/< commit-sha >.tar.gz",
-        .hash = "< package-hash >",
+        .url = "https://github.com/MysticalDevil/zseries/archive/<commit-sha>.tar.gz",
+        .hash = "<package-hash>",
     },
 },
 ```
