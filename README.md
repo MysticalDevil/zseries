@@ -72,11 +72,11 @@ just smoke          # Run ztotp smoke tests
 ## Build Individual Projects
 
 ```bash
-cd zcli && zig build test
-cd ztui && zig build test
-cd zlog && zig build test
-cd ztmpfile && zig build test
-cd ztotp && zig build run
+cd zcli && zig build test    # CLI library
+cd ztui && zig build test    # TUI library
+cd zlog && zig build test    # Logging library
+cd ztmpfile && zig build test  # Temp file library
+cd ztotp && zig build run    # TOTP application
 ```
 
 ## Project Layout
