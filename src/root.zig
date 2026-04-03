@@ -6,3 +6,5 @@ pub const importers = @import("importers.zig");
 pub const exporters = @import("exporters.zig");
 pub const input = @import("input.zig");
 pub const integration_tests = @import("integration_test.zig");
+pub const cli_color = @import("cli/color.zig");
+pub const cli_help = @import("cli/help.zig");

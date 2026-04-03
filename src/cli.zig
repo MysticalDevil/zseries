@@ -5,18 +5,33 @@ const totp = @import("totp.zig");
 const importers = @import("importers.zig");
 const exporters = @import("exporters.zig");
 const input = @import("input.zig");
+const color = @import("cli/color.zig");
+const help = @import("cli/help.zig");
 
 pub const CommandError = error{ InvalidArgs, EntryNotFound, VaultAlreadyExists, VaultMissing };
 
 pub fn run(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Environ.Map, args: []const []const u8) !void {
     if (args.len < 2) {
-        try printHelp();
+        try printHelp(allocator, env, null);
         return;
     }
 
     const command = args[1];
     if (std.mem.eql(u8, command, "help") or std.mem.eql(u8, command, "--help") or std.mem.eql(u8, command, "-h")) {
-        try printHelp();
+        if (args.len >= 3) {
+            try printHelp(allocator, env, args[2]);
+        } else {
+            try printHelp(allocator, env, null);
+        }
+        return;
+    }
+    if (!help.isKnownCommand(command)) {
+        std.debug.print("Unknown command: {s}\n", .{command});
+        std.debug.print("Run 'ztotp help' for usage.\n", .{});
+        return error.InvalidArgs;
+    }
+    if (hasArg(args[2..], "--help") or hasArg(args[2..], "-h")) {
+        try printHelp(allocator, env, command);
         return;
     }
     if (std.mem.eql(u8, command, "init")) return runInit(allocator, io, env, args[2..]);
@@ -31,22 +46,17 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
     return error.InvalidArgs;
 }
 
-fn printHelp() !void {
-    std.debug.print(
-        "ztotp - local-first encrypted TOTP manager\n" ++
-            "Commands:\n" ++
-            "  init [--password PASS]\n" ++
-            "  add --issuer ISSUER --account ACCOUNT --secret SECRET [--digits 6] [--period 30] [--algorithm SHA1] [--tag TAG]... [--note TEXT] [--password PASS]\n" ++
-            "  list [--password PASS]\n" ++
-            "  search [--issuer NAME] [--account NAME] [--tag TAG] [--password PASS]\n" ++
-            "  code (--id ID | QUERY) [--password PASS]\n" ++
-            "  update [--id ID] [--issuer NAME] [--account NAME] [--query TEXT] [--secret SECRET] [--digits N] [--period N] [--algorithm SHA1] [--set-tags a,b] [--clear-tags] [--note TEXT] [--password PASS]\n" ++
-            "  remove --id ID [--password PASS]\n" ++
-            "  import --from (otpauth|json|csv|aegis|aegis-encrypted|authy|authy-otpauth) --file PATH [--password PASS]\n" ++
-            "  export --to (otpauth|json|csv|aegis|aegis-encrypted|authy|authy-otpauth) --file PATH [--password PASS]\n" ++
-            "Password sources: --password, ZTOTP_PASSWORD, stdin prompt\n",
-        .{},
-    );
+fn printHelp(allocator: std.mem.Allocator, env: *const std.process.Environ.Map, command: ?[]const u8) !void {
+    const text = help.renderHelpAlloc(allocator, color.enabled(env), command) catch |err| switch (err) {
+        error.UnknownCommand => {
+            std.debug.print("Unknown help topic: {s}\n", .{command.?});
+            std.debug.print("Run 'ztotp help' for usage.\n", .{});
+            return;
+        },
+        else => return err,
+    };
+    defer allocator.free(text);
+    std.debug.print("{s}", .{text});
 }
 
 fn argValue(args: []const []const u8, name: []const u8) ?[]const u8 {
