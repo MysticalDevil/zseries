@@ -8,7 +8,8 @@ test "builder applies prefix suffix and randLen lower bound" {
     defer ztmpfile.compat.deletePath(parent) catch {};
 
     var b = ztmpfile.Builder.init();
-    _ = b.inDir(parent).prefix("pre-").suffix("-suf").randLen(1);
+    const result = b.inDir(parent).prefix("pre-").suffix("-suf").randLen(1);
+    try std.testing.expectEqual(@as(usize, @intFromPtr(&b)), @intFromPtr(result));
 
     var dir = try b.tempDir(std.testing.allocator);
     defer dir.deinit();
@@ -28,7 +29,8 @@ test "builder applies prefix suffix and randLen lower bound" {
 
 test "builder maxAttempts lower bound is one" {
     var b = ztmpfile.Builder.init();
-    _ = b.maxAttempts(0);
+    const result = b.maxAttempts(0);
+    try std.testing.expectEqual(@as(usize, @intFromPtr(&b)), @intFromPtr(result));
 
     try std.testing.expectEqual(@as(usize, 1), b.options.max_attempts);
 }
