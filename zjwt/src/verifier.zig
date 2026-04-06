@@ -75,15 +75,18 @@ pub const Verifier = struct {
         });
 
         var new_token: ?[]const u8 = null;
-        if (self.options.sliding_expiration and claims.exp != null) {
-            const exp = claims.exp.?;
-            const time_remaining = exp - now;
+        if (self.options.sliding_expiration) {
+            if (claims.exp) |exp| {
+                const time_remaining = exp - now;
 
-            if (time_remaining < self.options.sliding_window) {
-                claims.exp = now + (exp - claims.iat.?);
+                if (time_remaining < self.options.sliding_window) {
+                    if (claims.iat) |iat| {
+                        claims.exp = now + (exp - iat);
 
-                var encoder = Encoder.init(self.allocator, self.algorithm, self.key);
-                new_token = try encoder.encode(claims);
+                        var encoder = Encoder.init(self.allocator, self.algorithm, self.key);
+                        new_token = try encoder.encode(claims);
+                    }
+                }
             }
         }
 
