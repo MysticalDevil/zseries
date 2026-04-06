@@ -149,7 +149,8 @@ fn decryptMasterKey(allocator: std.mem.Allocator, slot: Slot, password: []const 
     defer allocator.free(nonce_bytes);
     const tag_bytes = try shared.hexDecodeAlloc(allocator, slot.key_params.tag);
     defer allocator.free(tag_bytes);
-    const salt_bytes = try shared.hexDecodeAlloc(allocator, slot.salt.?);
+    const salt = slot.salt orelse return error.InvalidAegisVault;
+    const salt_bytes = try shared.hexDecodeAlloc(allocator, salt);
     defer allocator.free(salt_bytes);
     var nonce: [Aead.nonce_length]u8 = undefined;
     @memcpy(&nonce, nonce_bytes);
