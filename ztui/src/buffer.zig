@@ -72,7 +72,7 @@ pub const Buffer = struct {
         for (0..self.height) |y| {
             for (0..self.width) |x| {
                 const cell = self.cells[self.index(x, y)];
-                if (last_style == null or last_style.? != cell.style_id) {
+                if (last_style != cell.style_id) {
                     try writer.writeAll(style.ansi(cell.style_id));
                     last_style = cell.style_id;
                 }
