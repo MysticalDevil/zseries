@@ -50,18 +50,17 @@ pub const SourceFile = struct {
         return false;
     }
 
-    /// Check if a node is inside a test block by scanning for test_decl
-    pub fn isInsideTestBlock(self: SourceFile, node: std.zig.Ast.Node.Index) bool {
+    /// Check if a node is inside a test block
+    /// Complete implementation: checks if target is descendant of any test_decl
+    pub fn isInsideTestBlock(self: SourceFile, target: std.zig.Ast.Node.Index) bool {
         const ast = self.ast;
         const tags = ast.nodes.items(.tag);
-        const node_idx = @intFromEnum(node);
 
-        // Find the first test_decl before this node
-        for (tags[0..node_idx], 0..) |tag, test_idx| {
+        // Find all test_decl nodes and check if target is in their subtree
+        for (tags, 0..) |tag, i| {
             if (tag == .test_decl) {
-                // Check if our node is within the scope of this test
-                const test_node: std.zig.Ast.Node.Index = @enumFromInt(test_idx);
-                if (self.isNodeInScope(test_node, node)) {
+                const test_node: std.zig.Ast.Node.Index = @enumFromInt(i);
+                if (self.isNodeDescendantOf(test_node, target)) {
                     return true;
                 }
             }
@@ -70,32 +69,26 @@ pub const SourceFile = struct {
         return false;
     }
 
-    /// Check if child node is within parent node's scope
-    fn isNodeInScope(self: SourceFile, parent: std.zig.Ast.Node.Index, child: std.zig.Ast.Node.Index) bool {
-        const parent_idx = @intFromEnum(parent);
-        const child_idx = @intFromEnum(child);
-
-        // Simple heuristic: if child comes after parent and they're in the same file,
-        // and there's no other top-level declaration between them
-        if (child_idx <= parent_idx) return false;
+    /// Check if target is descendant of ancestor (including direct children check)
+    fn isNodeDescendantOf(self: SourceFile, ancestor: std.zig.Ast.Node.Index, target: std.zig.Ast.Node.Index) bool {
+        if (ancestor == target) return false;
 
         const ast = self.ast;
-        const tags = ast.nodes.items(.tag);
 
-        // Check if there's another top-level decl between parent and child
-        var idx = parent_idx + 1;
-        while (idx < child_idx) : (idx += 1) {
-            const tag = tags[idx];
-            switch (tag) {
-                .fn_decl, .global_var_decl, .local_var_decl, .test_decl => {
-                    // Found another top-level item
-                    return false;
-                },
-                else => {},
-            }
+        // Get ancestor's first and last token
+        const anc_first = ast.firstToken(ancestor);
+        const anc_last = ast.lastToken(ancestor);
+
+        // Get target's first and last token
+        const tgt_first = ast.firstToken(target);
+        const tgt_last = ast.lastToken(target);
+
+        // Check if target is within ancestor's token range
+        if (tgt_first >= anc_first and tgt_last <= anc_last) {
+            return true;
         }
 
-        return true;
+        return false;
     }
 
     /// Get line and column from byte offset
