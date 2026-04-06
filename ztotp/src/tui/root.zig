@@ -86,7 +86,8 @@ fn drawTotpCard(buf: *buffer.Buffer, rect: widgets.Rect, allocator: std.mem.Allo
     widgets.label(buf, rect.x + 2, rect.y + 2, rect.width - 4, item.account_name, .normal);
     widgets.label(buf, rect.x + 2, rect.y + 3, rect.width - 4, item.source_label, .source);
     widgets.label(buf, rect.x + 2, rect.y + 4, 5, "code", .muted);
-    buf.putText(rect.x + 8, rect.y + 4, item.code.?[8 - item.code_len ..], .code);
+    const code = item.code orelse return error.MissingCode;
+    buf.putText(rect.x + 8, rect.y + 4, code[8 - item.code_len ..], .code);
     const filled = @min(16, (item.remaining_seconds * 16) / @max(1, item.period));
     widgets.progressBar(buf, rect.x + 2, rect.y + 6, 16, filled, .code, .muted);
     var countdown: [16]u8 = undefined;
