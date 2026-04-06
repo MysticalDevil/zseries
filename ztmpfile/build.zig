@@ -167,18 +167,18 @@ fn addWineRuntimeChecks(b: *std.Build, step: *std.Build.Step, optimize: std.buil
 }
 
 fn addWasmRuntimeChecks(b: *std.Build, step: *std.Build.Step, optimize: std.builtin.OptimizeMode) void {
-    const runner_path, const runner_kind = blk: {
+    const maybe_runner = blk: {
         const wasmtime = b.findProgram(&.{"wasmtime"}, &.{}) catch null;
         if (wasmtime) |r| break :blk .{ r, RunnerKind.wasmtime };
         const wasmer = b.findProgram(&.{"wasmer"}, &.{}) catch null;
         if (wasmer) |r| break :blk .{ r, RunnerKind.wasmer };
-        break :blk .{ null, null };
+        break :blk null;
     };
 
-    if (runner_path == null or runner_kind == null) {
+    const r_path, const r_kind = if (maybe_runner) |r| .{ r[0], r[1] } else {
         addSkipStep(b, step, "SKIP test-wasm: wasmtime/wasmer runner not found");
         return;
-    }
+    };
 
     const target = b.resolveTargetQuery(.{
         .cpu_arch = .wasm32,
@@ -203,9 +203,9 @@ fn addWasmRuntimeChecks(b: *std.Build, step: *std.Build.Step, optimize: std.buil
         .root_module = smoke_module,
     });
 
-    const run = switch (runner_kind.?) {
-        .wasmtime => b.addSystemCommand(&.{ runner_path.?, "--dir=." }),
-        .wasmer => b.addSystemCommand(&.{ runner_path.?, "run", "--dir=." }),
+    const run = switch (r_kind) {
+        .wasmtime => b.addSystemCommand(&.{ r_path, "--dir=." }),
+        .wasmer => b.addSystemCommand(&.{ r_path, "run", "--dir=." }),
     };
     run.addFileArg(smoke_test.getEmittedBin());
     run.step.dependOn(&smoke_test.step);
