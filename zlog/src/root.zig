@@ -8,3 +8,7 @@ pub const StdSink = @import("sink.zig").StdSink;
 pub const Config = @import("config.zig").Config;
 pub const config = @import("config.zig");
 pub const Logger = @import("logger.zig").Logger;
+
+pub const middleware = @import("middleware.zig");
+pub const MiddlewareConfig = @import("middleware/config.zig").MiddlewareConfig;
+pub const LogField = @import("middleware/config.zig").LogField;
