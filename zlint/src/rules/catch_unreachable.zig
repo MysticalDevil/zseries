@@ -6,11 +6,17 @@ const locations = @import("../ast/locations.zig");
 /// ZAI004: Detect catch unreachable / orelse unreachable / .? patterns
 /// These are common AI patterns to suppress error handling
 pub fn run(ctx: *RuleContext) !void {
+    // Skip test files if configured
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
     for (tags, 0..) |tag, i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+
+        // Skip nodes inside test blocks if configured
+        if (ctx.shouldSkipNode(node)) continue;
 
         if (tag == .@"catch") {
             try checkCatch(ctx, node);

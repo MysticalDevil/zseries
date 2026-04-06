@@ -10,6 +10,7 @@ pub const Config = struct {
     pub const ScanConfig = struct {
         include: []const []const u8 = &.{"."},
         exclude: []const []const u8 = &.{ ".git", "zig-cache", ".zig-cache", "zig-out" },
+        skip_tests: bool = true,
     };
 
     pub const OutputConfig = struct {

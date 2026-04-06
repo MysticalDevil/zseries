@@ -25,6 +25,18 @@ pub const RuleContext = struct {
             .message = message,
         });
     }
+
+    /// Check if we should skip this file (test file and config says to skip)
+    pub fn shouldSkipFile(self: *RuleContext) bool {
+        if (!self.config.scan.skip_tests) return false;
+        return self.file.isTestFile();
+    }
+
+    /// Check if we should skip this node (inside test block and config says to skip)
+    pub fn shouldSkipNode(self: *RuleContext, node: std.zig.Ast.Node.Index) bool {
+        if (!self.config.scan.skip_tests) return false;
+        return self.file.isInsideTestBlock(node);
+    }
 };
 
 /// Rule interface
