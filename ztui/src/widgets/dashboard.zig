@@ -185,10 +185,12 @@ fn sectionHeight(count: usize, per_row: usize, card_height: usize) usize {
 }
 
 fn testDrawCard(buf: *buffer.Buffer, rect: widgets.Rect, allocator: std.mem.Allocator, timestamp: i64, context: *anyopaque) !void {
-    _ = allocator;
-    _ = timestamp;
     const text: *const []const u8 = @ptrCast(@alignCast(context));
     buf.putText(rect.x, rect.y, text.*, .normal);
+    if (timestamp > 0) {
+        const tmp = try allocator.alloc(u8, 0);
+        allocator.free(tmp);
+    }
 }
 
 fn cellText(buf: *const buffer.Buffer, x: usize, y: usize) []const u8 {
