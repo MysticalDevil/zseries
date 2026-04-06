@@ -117,11 +117,13 @@ test "parse simple key-value" {
 
     try std.testing.expect(value.isTable());
 
-    const name = value.get("name").?.getString();
-    try std.testing.expectEqualStrings("test", name.?);
+    const name_val = value.get("name") orelse return error.MissingKey;
+    const name = name_val.getString() orelse return error.TypeMismatch;
+    try std.testing.expectEqualStrings("test", name);
 
-    const num = value.get("value").?.getInteger();
-    try std.testing.expectEqual(@as(i64, 42), num.?);
+    const num_val = value.get("value") orelse return error.MissingKey;
+    const num = num_val.getInteger() orelse return error.TypeMismatch;
+    try std.testing.expectEqual(@as(i64, 42), num);
 }
 
 test "parse nested table" {
@@ -134,14 +136,16 @@ test "parse nested table" {
     var value = try parseString(gpa, source);
     defer value.deinit(gpa);
 
-    const server = value.get("server").?;
+    const server = value.get("server") orelse return error.MissingKey;
     try std.testing.expect(server.isTable());
 
-    const host = server.get("host").?.getString();
-    try std.testing.expectEqualStrings("localhost", host.?);
+    const host_val = server.get("host") orelse return error.MissingKey;
+    const host = host_val.getString() orelse return error.TypeMismatch;
+    try std.testing.expectEqualStrings("localhost", host);
 
-    const port = server.get("port").?.getInteger();
-    try std.testing.expectEqual(@as(i64, 8080), port.?);
+    const port_val = server.get("port") orelse return error.MissingKey;
+    const port = port_val.getInteger() orelse return error.TypeMismatch;
+    try std.testing.expectEqual(@as(i64, 8080), port);
 }
 
 test "parse array" {
@@ -152,11 +156,12 @@ test "parse array" {
     var value = try parseString(gpa, source);
     defer value.deinit(gpa);
 
-    const arr = value.get("numbers").?;
+    const arr = value.get("numbers") orelse return error.MissingKey;
     try std.testing.expect(arr.isArray());
 
-    const first = arr.at(0).?.getInteger();
-    try std.testing.expectEqual(@as(i64, 1), first.?);
+    const first_val = arr.at(0) orelse return error.MissingKey;
+    const first = first_val.getInteger() orelse return error.TypeMismatch;
+    try std.testing.expectEqual(@as(i64, 1), first);
 }
 
 test "parse boolean" {
@@ -168,11 +173,13 @@ test "parse boolean" {
     var value = try parseString(gpa, source);
     defer value.deinit(gpa);
 
-    const enabled = value.get("enabled").?.getBoolean();
-    try std.testing.expect(enabled.?);
+    const enabled_val = value.get("enabled") orelse return error.MissingKey;
+    const enabled = enabled_val.getBoolean() orelse return error.TypeMismatch;
+    try std.testing.expect(enabled);
 
-    const disabled = value.get("disabled").?.getBoolean();
-    try std.testing.expect(!disabled.?);
+    const disabled_val = value.get("disabled") orelse return error.MissingKey;
+    const disabled = disabled_val.getBoolean() orelse return error.TypeMismatch;
+    try std.testing.expect(!disabled);
 }
 
 test "parse float" {
@@ -183,8 +190,9 @@ test "parse float" {
     var value = try parseString(gpa, source);
     defer value.deinit(gpa);
 
-    const pi = value.get("pi").?.getFloat();
-    try std.testing.expectApproxEqAbs(@as(f64, 3.14159), pi.?, 0.00001);
+    const pi_val = value.get("pi") orelse return error.MissingKey;
+    const pi = pi_val.getFloat() orelse return error.TypeMismatch;
+    try std.testing.expectApproxEqAbs(@as(f64, 3.14159), pi, 0.00001);
 }
 
 test "serialize value" {
