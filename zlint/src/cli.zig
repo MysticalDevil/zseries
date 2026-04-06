@@ -17,47 +17,81 @@ pub const Options = struct {
     };
 };
 
-/// Command definition for zcli help generation
-const cmd_def: zcli.help.Command = .{
-    .name = "zlint",
-    .summary = "Zig project linter for enforcing code quality rules",
-    .flags = &.{
-        .{ .name = "--file", .value_name = "PATH", .description = "Single file to lint (skips directory scanning)" },
-        .{ .name = "--format", .short = "-f", .value_name = "FORMAT", .description = "Output format: text or json (default: text)" },
-        .{ .name = "--config", .short = "-c", .value_name = "PATH", .description = "Config file path (default: zlint.toml)" },
-        .{ .name = "--root", .short = "-r", .value_name = "PATH", .description = "Project root path (default: .)" },
-        .{ .name = "--no-compile-check", .description = "Skip compile check" },
-        .{ .name = "--no-build", .description = "Skip auto zig build if build.zig exists" },
-        .{ .name = "--quiet", .short = "-q", .description = "Suppress output" },
-        .{ .name = "--help", .short = "-h", .description = "Show this help" },
-    },
-};
-
-/// Print help text
+/// Print compact colorful help text
 fn printHelp() !void {
-    const help =
-        \\zlint - Zig project linter
-        \\
-        \\Usage: zlint [options]
-        \\
-        \\Options:
-        \\  -f, --format <FORMAT>   Output format: text or json (default: text)
-        \\  -c, --config <PATH>     Config file path (default: zlint.toml)
-        \\  -r, --root <PATH>       Project root path (default: .)
-        \\      --no-compile-check  Skip compile check
-        \\      --no-build          Skip auto zig build if build.zig exists
-        \\  -q, --quiet             Suppress output
-        \\  -h, --help              Show this help
-        \\
-        \\Exit codes:
-        \\  0  No diagnostics or only warnings
-        \\  1  At least one error
-        \\  2  Compile check failed
-        \\  3  Config or CLI error
-        \\  4  Build failed
-        \\
-    ;
-    std.debug.print("{s}", .{help});
+    var out: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
+    defer out.deinit();
+    const writer = &out.writer;
+
+    // Title
+    try zcli.color.writeStyled(writer, true, .command, "zlint");
+    try writer.writeAll(" - Zig project linter\n\n");
+
+    // Usage
+    try zcli.color.writeStyled(writer, true, .heading, "USAGE\n");
+    try writer.writeAll("  zlint [options]\n\n");
+
+    // Options
+    try zcli.color.writeStyled(writer, true, .heading, "OPTIONS\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "-f, --format");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, true, .value, "<FORMAT>");
+    try writer.writeAll("      Output: text or json (default: text)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "-c, --config");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
+    try writer.writeAll("      Config file (default: zlint.toml)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "-r, --root");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
+    try writer.writeAll("        Project root (default: .)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "    --file");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
+    try writer.writeAll("        Lint single file only\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "    --no-compile-check");
+    try writer.writeAll("     Skip compile check\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "    --no-build");
+    try writer.writeAll("           Skip auto zig build\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "-q, --quiet");
+    try writer.writeAll("              Suppress output\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, true, .flag, "-h, --help");
+    try writer.writeAll("               Show this help\n\n");
+
+    // Exit codes
+    try zcli.color.writeStyled(writer, true, .heading, "EXIT CODES\n");
+    try writer.writeAll("  0  No issues or only warnings\n");
+    try writer.writeAll("  1  At least one error\n");
+    try writer.writeAll("  2  Compile check failed\n");
+    try writer.writeAll("  3  Config or CLI error\n");
+    try writer.writeAll("  4  Build failed\n\n");
+
+    // Examples
+    try zcli.color.writeStyled(writer, true, .heading, "EXAMPLES\n");
+    try writer.writeAll("  zlint                    Lint current directory\n");
+    try writer.writeAll("  zlint -r ./my-project    Lint specific project\n");
+    try writer.writeAll("  zlint --file main.zig    Lint single file\n");
+    try writer.writeAll("  zlint -f json            Output as JSON\n");
+
+    const help_text = try out.toOwnedSlice();
+    defer std.heap.page_allocator.free(help_text);
+    std.debug.print("{s}", .{help_text});
 }
 
 /// Parse command line arguments using zcli
