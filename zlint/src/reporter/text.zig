@@ -4,7 +4,14 @@ const Diagnostic = @import("../diagnostic.zig").Diagnostic;
 const Summary = @import("../diagnostic.zig").Summary;
 const Severity = @import("../diagnostic.zig").Severity;
 
-/// Write diagnostics in text format with rich colors
+// Nerd Font icons - using string literals with UTF-8 encoding
+const ICON_FILE = "\xEF\x85\x9B"; // nf-fa-file_code_o (U+F15B)
+const ICON_ERROR = "\xEF\x81\x97"; // nf-fa-times_circle (U+F057)
+const ICON_WARNING = "\xEF\x81\xB1"; // nf-fa-warning (U+F071)
+const ICON_SUCCESS = "\xEF\x81\x98"; // nf-fa-check_circle (U+F058)
+const ICON_X = "\xEF\x80\x8D"; // nf-fa-times (U+F00D)
+
+/// Write diagnostics in text format with rich colors using Nerd Fonts
 pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summary, use_color: bool) !void {
     // Group diagnostics by file for better organization
     var current_path: ?[]const u8 = null;
@@ -17,7 +24,8 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
             }
             current_path = d.path;
             try writer.writeByte('\n');
-            try zcli.color.writeStyled(writer, use_color, .command, "📄 ");
+            try zcli.color.writeStyled(writer, use_color, .command, ICON_FILE);
+            try writer.writeByte(' ');
             try zcli.color.writeStyled(writer, use_color, .value, d.path);
             try writer.writeByte('\n');
         }
@@ -34,13 +42,13 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
         // Write severity with icon and color
         switch (d.severity) {
             .err => {
-                try zcli.color.writeStyled(writer, use_color, .title, "❌");
-                try writer.writeAll(" ");
+                try zcli.color.writeStyled(writer, use_color, .title, ICON_ERROR);
+                try writer.writeByte(' ');
                 try zcli.color.writeStyled(writer, use_color, .title, "error");
             },
             .warning => {
-                try zcli.color.writeStyled(writer, use_color, .flag, "⚠️");
-                try writer.writeAll(" ");
+                try zcli.color.writeStyled(writer, use_color, .flag, ICON_WARNING);
+                try writer.writeByte(' ');
                 try zcli.color.writeStyled(writer, use_color, .flag, "warning");
             },
         }
@@ -80,8 +88,8 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
 
         // Errors
         try writer.writeAll("  ");
-        try zcli.color.writeStyled(writer, use_color, .title, "❌ Errors:");
-        try writer.writeAll("   ");
+        try zcli.color.writeStyled(writer, use_color, .title, ICON_ERROR);
+        try writer.writeAll(" Errors:   ");
         if (summary.errors > 0) {
             try zcli.color.writeStyled(writer, use_color, .title, try std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{summary.errors}));
         } else {
@@ -91,8 +99,8 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
 
         // Warnings
         try writer.writeAll("  ");
-        try zcli.color.writeStyled(writer, use_color, .flag, "⚠️  Warnings:");
-        try writer.writeAll(" ");
+        try zcli.color.writeStyled(writer, use_color, .flag, ICON_WARNING);
+        try writer.writeAll(" Warnings: ");
         if (summary.warnings > 0) {
             try zcli.color.writeStyled(writer, use_color, .flag, try std.fmt.allocPrint(std.heap.page_allocator, "{d}", .{summary.warnings}));
         } else {
@@ -103,11 +111,17 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
         // Status indicator
         try writer.writeByte('\n');
         if (summary.errors > 0) {
-            try zcli.color.writeStyled(writer, use_color, .title, "  ✗ Check failed with errors\n");
+            try zcli.color.writeStyled(writer, use_color, .title, "  ");
+            try zcli.color.writeStyled(writer, use_color, .title, ICON_X);
+            try zcli.color.writeStyled(writer, use_color, .title, " Check failed with errors\n");
         } else if (summary.warnings > 0) {
-            try zcli.color.writeStyled(writer, use_color, .flag, "  ⚠ Check completed with warnings\n");
+            try zcli.color.writeStyled(writer, use_color, .flag, "  ");
+            try zcli.color.writeStyled(writer, use_color, .flag, ICON_WARNING);
+            try zcli.color.writeStyled(writer, use_color, .flag, " Check completed with warnings\n");
         } else {
-            try zcli.color.writeStyled(writer, use_color, .command, "  ✓ All checks passed\n");
+            try zcli.color.writeStyled(writer, use_color, .command, "  ");
+            try zcli.color.writeStyled(writer, use_color, .command, ICON_SUCCESS);
+            try zcli.color.writeStyled(writer, use_color, .command, " All checks passed\n");
         }
 
         try writer.writeByte('\n');
@@ -117,8 +131,9 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
         try writer.writeByte('\n');
         try zcli.color.writeStyled(writer, use_color, .heading, "═══════════════════════════════════════════════════════\n");
         try writer.writeByte('\n');
-        try zcli.color.writeStyled(writer, use_color, .command, "  ✓");
-        try writer.writeAll(" ");
+        try zcli.color.writeStyled(writer, use_color, .command, "  ");
+        try zcli.color.writeStyled(writer, use_color, .command, ICON_SUCCESS);
+        try writer.writeByte(' ');
         try zcli.color.writeStyled(writer, use_color, .command, "All checks passed");
         try writer.writeByte('\n');
         try writer.writeAll("  ");
