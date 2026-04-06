@@ -34,18 +34,42 @@ pub const SourceFile = struct {
         self.allocator.free(self.content);
     }
 
-    /// Check if this file is a test file based on path patterns
-    pub fn isTestFile(self: SourceFile) bool {
+    /// Check if this file should be skipped (tests, examples based on path patterns)
+    /// Uses table-driven pattern matching
+    pub fn shouldSkipFile(self: SourceFile) bool {
         const path = self.path;
-
-        // Check file name patterns
-        if (std.mem.endsWith(u8, path, "_test.zig")) return true;
-        if (std.mem.indexOf(u8, path, "/test/") != null) return true;
-        if (std.mem.indexOf(u8, path, "/tests/") != null) return true;
-
-        // Check for test.zig or main_test.zig patterns
         const basename = std.fs.path.basename(path);
-        if (std.mem.eql(u8, basename, "test.zig")) return true;
+
+        // Table of patterns to skip
+        const suffix_patterns = [_][]const u8{
+            "_test.zig",
+        };
+
+        const contains_patterns = [_][]const u8{
+            "/test/",
+            "/tests/",
+            "/examples/",
+            "/example/",
+        };
+
+        const equals_patterns = [_][]const u8{
+            "test.zig",
+        };
+
+        // Check suffix patterns
+        for (suffix_patterns) |pattern| {
+            if (std.mem.endsWith(u8, path, pattern)) return true;
+        }
+
+        // Check contains patterns
+        for (contains_patterns) |pattern| {
+            if (std.mem.indexOf(u8, path, pattern) != null) return true;
+        }
+
+        // Check equals patterns
+        for (equals_patterns) |pattern| {
+            if (std.mem.eql(u8, basename, pattern)) return true;
+        }
 
         return false;
     }
