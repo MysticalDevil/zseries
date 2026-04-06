@@ -10,27 +10,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    const c_module = b.createModule(.{
-        .root_source_file = b.path("src/c/root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .imports = &.{
-            .{ .name = "ztmpfile", .module = ztmpfile_module },
-        },
-    });
-    const c_lib = b.addLibrary(.{
-        .name = "ztmpfile",
-        .root_module = c_module,
-        .linkage = .static,
-    });
-    b.installArtifact(c_lib);
-    _ = b.addModule("ztmpfile_c", .{
-        .root_source_file = b.path("src/c/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-    b.installFile("include/ztmpfile.h", "include/ztmpfile.h");
-
     const unit_test_module = b.createModule(.{
         .root_source_file = b.path("tests/unit.zig"),
         .target = target,
@@ -93,17 +72,10 @@ pub fn build(b: *std.Build) void {
     test_runtime_step.dependOn(test_wine_step);
     test_runtime_step.dependOn(test_wasm_step);
 
-    const test_c_step = b.step("test-c", "Build and run C ABI smoke test");
-    addCSmokeCheck(b, test_c_step, c_lib);
-    // Backward-compatible alias.
-    const test_c_abi_step = b.step("test-c-abi", "Alias of test-c");
-    test_c_abi_step.dependOn(test_c_step);
-
     const test_step = b.step("test", "Run ztmpfile tests");
     test_step.dependOn(test_unit_step);
     test_step.dependOn(test_integration_step);
     test_step.dependOn(test_cross_step);
-    test_step.dependOn(test_c_step);
 
     const test_all_step = b.step("test-all", "Run full suite including optional runtime checks");
     test_all_step.dependOn(test_step);
@@ -248,22 +220,4 @@ const RunnerKind = enum {
 fn addSkipStep(b: *std.Build, step: *std.Build.Step, msg: []const u8) void {
     const run = b.addSystemCommand(&.{ "/bin/sh", "-c", b.fmt("printf '%s\\n' \"{s}\"", .{msg}) });
     step.dependOn(&run.step);
-}
-
-fn addCSmokeCheck(b: *std.Build, step: *std.Build.Step, c_lib: *std.Build.Step.Compile) void {
-    const run = b.addSystemCommand(&.{
-        "zig",
-        "cc",
-        "tests/c_smoke.c",
-        "-Iinclude",
-        "-o",
-        ".zig-cache/c_smoke",
-    });
-    run.addFileArg(c_lib.getEmittedBin());
-    run.step.dependOn(&c_lib.step);
-    step.dependOn(&run.step);
-
-    const execute = b.addSystemCommand(&.{".zig-cache/c_smoke"});
-    execute.step.dependOn(&run.step);
-    step.dependOn(&execute.step);
 }
