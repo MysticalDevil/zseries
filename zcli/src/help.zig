@@ -96,7 +96,10 @@ pub fn writeHelp(writer: *std.Io.Writer, cmd: Command, opts: Options) !void {
             }
             const name_len = sub.name.len;
             if (name_len < 12) {
-                try writer.writeByteNTimes(' ', 12 - name_len);
+                var i: usize = 0;
+                while (i < 12 - name_len) : (i += 1) {
+                    try writer.writeByte(' ');
+                }
             }
             try writer.writeAll("  ");
             try writer.writeAll(sub.summary);

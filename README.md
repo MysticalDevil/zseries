@@ -19,6 +19,7 @@ For third-party projects, vendor the library directory you want to consume and d
 | [ztui](ztui/) | Library | TUI buffer, terminal, and widget primitives |
 | [zlog](zlog/) | Library | Structured logging with levels and multiple sinks |
 | [ztmpfile](ztmpfile/) | Library | Cross-platform temp file/dir with C ABI support |
+| [ztoml](ztoml/) | Library | TOML parsing library with DOM-style API |
 
 ## Quick Links
 
