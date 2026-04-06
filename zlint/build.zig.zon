@@ -1,0 +1,20 @@
+.{
+    .name = .zlint,
+    .version = "0.1.0",
+    .fingerprint = 0xefa0446b0b5feb8c,
+    .minimum_zig_version = "0.16.0-dev.2860+9c5460316",
+    .dependencies = .{
+        .ztoml = .{
+            .path = "../ztoml",
+        },
+        .zcli = .{
+            .path = "../zcli",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "README.md",
+    },
+}
