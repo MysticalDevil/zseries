@@ -21,6 +21,10 @@ pub const Config = struct {
         max_anytype_params: ?MaxAnytypeParamsConfig = null,
         no_do_not_optimize_away: ?NoDoNotOptimizeAwayConfig = null,
         no_empty_catch: ?NoEmptyCatchConfig = null,
+        ZAI004: ?ZAI004Config = null,
+        ZAI005: ?ZAI005Config = null,
+        ZAI006: ?ZAI006Config = null,
+        ZAI007: ?ZAI007Config = null,
     };
 
     pub const DiscardedResultConfig = struct {
@@ -45,6 +49,26 @@ pub const Config = struct {
     pub const NoEmptyCatchConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "warning",
+    };
+
+    pub const ZAI004Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+    };
+
+    pub const ZAI005Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+    };
+
+    pub const ZAI006Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+    };
+
+    pub const ZAI007Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
     };
 };
 

@@ -102,5 +102,69 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
         });
     }
 
+    // Add ZAI004 rule if enabled
+    if (config.rules.ZAI004) |rule_config| {
+        if (rule_config.enabled) {
+            try rules.append(allocator, .{
+                .name = "ZAI004",
+                .run = @import("catch_unreachable.zig").run,
+            });
+        }
+    } else {
+        // Default: enabled
+        try rules.append(allocator, .{
+            .name = "ZAI004",
+            .run = @import("catch_unreachable.zig").run,
+        });
+    }
+
+    // Add ZAI005 rule if enabled
+    if (config.rules.ZAI005) |rule_config| {
+        if (rule_config.enabled) {
+            try rules.append(allocator, .{
+                .name = "ZAI005",
+                .run = @import("defer_return_invalid.zig").run,
+            });
+        }
+    } else {
+        // Default: enabled
+        try rules.append(allocator, .{
+            .name = "ZAI005",
+            .run = @import("defer_return_invalid.zig").run,
+        });
+    }
+
+    // Add ZAI006 rule if enabled
+    if (config.rules.ZAI006) |rule_config| {
+        if (rule_config.enabled) {
+            try rules.append(allocator, .{
+                .name = "ZAI006",
+                .run = @import("unused_allocator.zig").run,
+            });
+        }
+    } else {
+        // Default: enabled
+        try rules.append(allocator, .{
+            .name = "ZAI006",
+            .run = @import("unused_allocator.zig").run,
+        });
+    }
+
+    // Add ZAI007 rule if enabled
+    if (config.rules.ZAI007) |rule_config| {
+        if (rule_config.enabled) {
+            try rules.append(allocator, .{
+                .name = "ZAI007",
+                .run = @import("global_allocator_in_lib.zig").run,
+            });
+        }
+    } else {
+        // Default: enabled
+        try rules.append(allocator, .{
+            .name = "ZAI007",
+            .run = @import("global_allocator_in_lib.zig").run,
+        });
+    }
+
     return rules.toOwnedSlice(allocator);
 }
