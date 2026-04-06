@@ -46,7 +46,10 @@ fn hotp(secret: []const u8, counter: u64, algorithm: model.Algorithm, digits: u8
 
     const binary = truncateHmac(digest[0..digest_len], digits);
     var buf: [8]u8 = [_]u8{'0'} ** 8;
-    const formatted = std.fmt.bufPrint(&buf, "{d:0>8}", .{binary}) catch unreachable;
+    // bufPrint cannot fail here since buffer is large enough
+    const formatted = std.fmt.bufPrint(&buf, "{d:0>8}", .{binary}) catch |err| {
+        std.debug.panic("bufPrint failed: {}", .{err});
+    };
     var result: [8]u8 = [_]u8{'0'} ** 8;
     const start = buf.len - formatted.len;
     @memcpy(result[start..], formatted);

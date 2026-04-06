@@ -90,7 +90,7 @@ pub fn importEncrypted(allocator: std.mem.Allocator, bytes: []const u8, password
     defer allocator.free(salt);
     const iv = try shared.base64DecodeAlloc(allocator, iv_b64);
     defer allocator.free(iv);
-    const key = shared.pbkdf2Sha256(password, salt, 10_000);
+    const key = try shared.pbkdf2Sha256(password, salt, 10_000);
     const tag_offset = ciphertext.len - 16;
     const plaintext = try shared.aes256GcmDecryptAlloc(allocator, ciphertext[0..tag_offset], iv, ciphertext[tag_offset..], key);
     defer allocator.free(plaintext);

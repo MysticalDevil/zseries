@@ -125,15 +125,15 @@ pub fn aes256CbcDecryptAlloc(allocator: std.mem.Allocator, ciphertext: []const u
     return result;
 }
 
-pub fn pbkdf2Sha1(password: []const u8, salt: []const u8, iterations: u32) [32]u8 {
+pub fn pbkdf2Sha1(password: []const u8, salt: []const u8, iterations: u32) ![32]u8 {
     var key: [32]u8 = undefined;
-    std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.HmacSha1) catch unreachable;
+    try std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.HmacSha1);
     return key;
 }
 
-pub fn pbkdf2Sha256(password: []const u8, salt: []const u8, iterations: u32) [32]u8 {
+pub fn pbkdf2Sha256(password: []const u8, salt: []const u8, iterations: u32) ![32]u8 {
     var key: [32]u8 = undefined;
-    std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.sha2.HmacSha256) catch unreachable;
+    try std.crypto.pwhash.pbkdf2(&key, password, salt, iterations, std.crypto.auth.hmac.sha2.HmacSha256);
     return key;
 }
 

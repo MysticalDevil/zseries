@@ -63,7 +63,7 @@ fn decryptNew(allocator: std.mem.Allocator, bytes: []const u8, password: []const
     const nonce = bytes[16..28];
     const tag = bytes[bytes.len - 16 ..];
     const ciphertext = bytes[28 .. bytes.len - 16];
-    const key = shared.pbkdf2Sha1(password, salt, @intCast(iterations));
+    const key = try shared.pbkdf2Sha1(password, salt, @intCast(iterations));
     return shared.aes256GcmDecryptAlloc(allocator, ciphertext, nonce, tag, key);
 }
 
