@@ -16,7 +16,7 @@ pub fn run(ctx: *RuleContext) !void {
             try checkCatch(ctx, node);
         } else if (tag == .@"orelse") {
             try checkOrElse(ctx, node);
-        } else if (tag == .optional_type or tag == .unwrap_optional) {
+        } else if (tag == .unwrap_optional) {
             try checkUnwrap(ctx, node);
         }
     }

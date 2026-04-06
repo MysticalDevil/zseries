@@ -18,7 +18,12 @@ pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summ
 
     for (diagnostics) |d| {
         // Print file header when path changes
-        if (current_path == null or !std.mem.eql(u8, current_path.?, d.path)) {
+        const path_changed = if (current_path) |path|
+            !std.mem.eql(u8, path, d.path)
+        else
+            true;
+
+        if (path_changed) {
             if (current_path != null) {
                 try writer.writeByte('\n');
             }
