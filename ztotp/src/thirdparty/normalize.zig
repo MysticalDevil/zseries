@@ -60,5 +60,6 @@ test "marks non totp entries readonly" {
     }, 0, 0);
     try testing.expectEqual(model.EntryKind.hotp, entry.kind);
     try testing.expect(entry.isReadonly());
-    try testing.expectEqualStrings(readonly_reason_non_totp, entry.readonly_reason.?);
+    const reason = entry.readonly_reason orelse "unknown";
+    try testing.expectEqualStrings(readonly_reason_non_totp, reason);
 }
