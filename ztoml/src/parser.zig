@@ -39,7 +39,7 @@ const Parser = struct {
     }
 
     fn skipNewlines(self: *Parser) ErrorSet!void {
-        while (self.current_token.type == .NewLine or self.current_token.type == .Comment) {
+        while (self.current_token.type == .NewLine) {
             try self.advance();
         }
     }
@@ -64,7 +64,8 @@ const Parser = struct {
                 try self.parseArrayTableHeader(&root);
             } else {
                 // Parse key-value into current table context
-                try self.parseKeyValue(self.current_table.?);
+                const table = self.current_table orelse return ErrorSet.InvalidTable;
+                try self.parseKeyValue(table);
             }
         }
 
@@ -234,7 +235,7 @@ const Parser = struct {
                         } else {
                             const new_table = Value.table(self.allocator);
                             try t.put(part, new_table);
-                            current = t.getPtr(part).?;
+                            current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
                         }
                     }
                 },
@@ -263,7 +264,7 @@ const Parser = struct {
                     } else {
                         const new_table = Value.table(self.allocator);
                         try t.put(part, new_table);
-                        current = t.getPtr(part).?;
+                        current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
                     }
                 },
                 else => return ErrorSet.InvalidTable,
@@ -297,7 +298,7 @@ const Parser = struct {
                     } else {
                         const new_table = Value.table(self.allocator);
                         try t.put(part, new_table);
-                        current = t.getPtr(part).?;
+                        current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
                     }
                 },
                 else => return ErrorSet.InvalidTable,
@@ -324,7 +325,7 @@ const Parser = struct {
                     try arr.append(self.allocator, new_table);
                     try t.put(last_key, arr);
                     // The new table inside the array is the current context
-                    const arr_ptr = t.getPtr(last_key).?;
+                    const arr_ptr = t.getPtr(last_key) orelse return ErrorSet.InvalidTable;
                     self.current_table = &arr_ptr.Array.items[0];
                 }
             },
