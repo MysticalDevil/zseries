@@ -40,6 +40,8 @@ pub const ErrorSet = error{
     InvalidEscapeSequence,
     OutOfMemory,
     IoError,
+    MissingKey,
+    TypeMismatch,
 };
 
 /// Create an error with position information
