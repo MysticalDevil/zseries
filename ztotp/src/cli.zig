@@ -53,7 +53,7 @@ pub fn run(allocator: std.mem.Allocator, io: std.Io, env: *const std.process.Env
 fn printHelp(allocator: std.mem.Allocator, env: *const std.process.Environ.Map, command: ?[]const u8) !void {
     const text = help.renderHelpAlloc(allocator, color.enabled(env), command) catch |err| switch (err) {
         error.UnknownCommand => {
-            std.debug.print("Unknown help topic: {s}\n", .{command.?});
+            std.debug.print("Unknown help topic: {s}\n", .{command orelse "<unknown>"});
             std.debug.print("Run 'ztotp help' for usage.\n", .{});
             return;
         },
