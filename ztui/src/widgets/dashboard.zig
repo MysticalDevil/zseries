@@ -63,9 +63,9 @@ pub const Dashboard = struct {
             const frame = try self.renderFrame();
             defer self.allocator.free(frame.text);
 
-            const changed = last_hash == null or last_hash.? != frame.hash;
+            const changed = if (last_hash) |h| h != frame.hash else true;
             const current_size = (@as(u64, frame.width) << 32) | @as(u64, frame.height);
-            const size_changed = last_size == null or last_size.? != current_size;
+            const size_changed = if (last_size) |s| s != current_size else true;
 
             if (changed) {
                 if (need_clear or size_changed) {
