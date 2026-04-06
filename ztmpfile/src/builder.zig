@@ -51,8 +51,7 @@ pub fn tempdir(allocator: std.mem.Allocator) !TempDir {
 
 pub fn tempdirIn(allocator: std.mem.Allocator, dir_path: []const u8) !TempDir {
     var builder = Builder.init();
-    _ = builder.inDir(dir_path);
-    return builder.tempDir(allocator);
+    return builder.inDir(dir_path).tempDir(allocator);
 }
 
 pub fn tempfile(allocator: std.mem.Allocator) !NamedTempFile {
@@ -62,6 +61,5 @@ pub fn tempfile(allocator: std.mem.Allocator) !NamedTempFile {
 
 pub fn tempfileIn(allocator: std.mem.Allocator, dir_path: []const u8) !NamedTempFile {
     var builder = Builder.init();
-    _ = builder.inDir(dir_path);
-    return builder.namedTempFile(allocator);
+    return builder.inDir(dir_path).namedTempFile(allocator);
 }

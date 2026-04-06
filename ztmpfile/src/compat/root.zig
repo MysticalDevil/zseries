@@ -4,9 +4,7 @@ const adapter = @import("../adapter/root.zig");
 
 pub fn createPath(allocator: std.mem.Allocator, prefix: []const u8) ![]u8 {
     var b = builder.Builder.init();
-    _ = b.prefix(prefix);
-
-    var dir = try b.tempDir(allocator);
+    var dir = try b.prefix(prefix).tempDir(allocator);
     return dir.persist();
 }
 
