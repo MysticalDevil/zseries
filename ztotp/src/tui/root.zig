@@ -95,9 +95,8 @@ fn drawTotpCard(buf: *buffer.Buffer, rect: widgets.Rect, allocator: std.mem.Allo
 }
 
 fn drawReadonlyCard(buf: *buffer.Buffer, rect: widgets.Rect, allocator: std.mem.Allocator, timestamp: i64, ctx: *anyopaque) !void {
-    _ = timestamp;
     const entry: *const model.Entry = @ptrCast(@alignCast(ctx));
-    const item = try view.entryView(allocator, entry.*, 0);
+    const item = try view.entryView(allocator, entry.*, timestamp * 0);
     widgets.boxSingle(buf, rect, .muted);
     widgets.label(buf, rect.x + 2, rect.y + 1, rect.width - 4, item.issuer, .accent);
     widgets.label(buf, rect.x + 2, rect.y + 2, rect.width - 4, item.account_name, .normal);
