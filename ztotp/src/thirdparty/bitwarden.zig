@@ -29,8 +29,9 @@ fn importJson(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]cons
     defer entries.deinit(allocator);
     for (parsed.items, 0..) |item, i| {
         const totp_uri = if (item.login) |login| login.totp else null;
-        if (totp_uri == null or totp_uri.?.len == 0) continue;
-        const parsed_uri = try otpauth.parseUri(allocator, totp_uri.?);
+        const uri = totp_uri orelse continue;
+        if (uri.len == 0) continue;
+        const parsed_uri = try otpauth.parseUri(allocator, uri);
         defer parsed_uri.deinit(allocator);
         var input = parsed_uri.input;
         input.id = item.id;
@@ -66,13 +67,14 @@ fn importCsv(allocator: std.mem.Allocator, bytes: []const u8, now: i64) ![]const
                 break;
             }
         }
-        if (totp_uri == null) continue;
-        const parsed_uri = try otpauth.parseUri(allocator, totp_uri.?);
-        defer parsed_uri.deinit(allocator);
-        var input = parsed_uri.input;
-        input.source_format = "bitwarden";
-        try entries.append(allocator, try normalize.entryAlloc(allocator, input, now, row_index));
-        row_index += 1;
+        if (totp_uri) |uri| {
+            const parsed_uri = try otpauth.parseUri(allocator, uri);
+            defer parsed_uri.deinit(allocator);
+            var input = parsed_uri.input;
+            input.source_format = "bitwarden";
+            try entries.append(allocator, try normalize.entryAlloc(allocator, input, now, row_index));
+            row_index += 1;
+        }
     }
     return entries.toOwnedSlice(allocator);
 }
