@@ -327,8 +327,7 @@ fn renderExportHelpAlloc(allocator: std.mem.Allocator, use_color: bool) ![]u8 {
 }
 
 pub fn renderHelpAlloc(allocator: std.mem.Allocator, use_color: bool, command: ?[]const u8) ![]u8 {
-    if (command == null) return renderGeneralHelpAlloc(allocator, use_color);
-    const value = command.?;
+    const value = command orelse return renderGeneralHelpAlloc(allocator, use_color);
     if (std.mem.eql(u8, value, "init")) return renderInitHelpAlloc(allocator, use_color);
     if (std.mem.eql(u8, value, "add")) return renderAddHelpAlloc(allocator, use_color);
     if (std.mem.eql(u8, value, "list")) return renderListHelpAlloc(allocator, use_color);
