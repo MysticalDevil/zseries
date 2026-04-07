@@ -34,19 +34,16 @@ fn checkCatchBlock(
     const node_data = ast.nodeData(node);
 
     // catch uses node_and_node: { lhs, rhs }
-    // lhs is the expression being caught
-    // rhs is the catch handler (the block or expression after catch)
     const lhs = node_data.node_and_node[0];
     const rhs = node_data.node_and_node[1];
     _ = lhs;
 
-    // Check if rhs is a block
     const rhs_tag = ast.nodeTag(rhs);
 
     // Allow unreachable
     if (rhs_tag == .unreachable_literal) return;
 
-    // Allow null (check if it's the identifier "null")
+    // Allow null identifier
     if (rhs_tag == .identifier) {
         const tokens = ast.nodes.items(.main_token);
         const token = tokens[@intFromEnum(rhs)];
@@ -57,10 +54,8 @@ fn checkCatchBlock(
     // Check blocks for being empty or comment-only
     switch (rhs_tag) {
         .block_two, .block_two_semicolon, .block, .block_semicolon => {
-            // Check if block is empty or only contains comments
             if (try isEmptyOrCommentOnlyBlock(ast, rhs, ctx.file.content)) {
                 const loc = locations.getNodeLocation(ast, node, ctx.file.content);
-
                 try ctx.addDiagnostic(
                     "no-empty-catch",
                     severity,
@@ -80,39 +75,45 @@ fn isEmptyOrCommentOnlyBlock(
     block_node: std.zig.Ast.Node.Index,
     source: []const u8,
 ) !bool {
-    // Get the block's content range
     const first_tok = ast.firstToken(block_node);
     const last_tok = ast.lastToken(block_node);
 
     const block_start = ast.tokenStart(first_tok);
     const block_end = ast.tokenStart(last_tok) + @as(u32, @intCast(ast.tokenSlice(last_tok).len));
-
-    // Extract block content (between { and })
     const block_content = source[block_start..block_end];
 
-    // Check if there's any non-whitespace, non-comment content
+    // Skip opening brace and whitespace after it
     var i: usize = 0;
-    while (i < block_content.len) {
+    if (i < block_content.len and block_content[i] == '{') {
+        i += 1;
+    }
+
+    // Skip trailing '}'
+    var end: usize = block_content.len;
+    if (end > 0 and block_content[end - 1] == '}') {
+        end -= 1;
+    }
+
+    // Check content between { and }
+    while (i < end) {
         // Skip whitespace
-        while (i < block_content.len and std.ascii.isWhitespace(block_content[i])) {
+        while (i < end and std.ascii.isWhitespace(block_content[i])) {
             i += 1;
         }
 
-        if (i >= block_content.len) break;
+        if (i >= end) break;
 
         // Check for comments
-        if (i + 1 < block_content.len and block_content[i] == '/' and block_content[i + 1] == '/') {
-            // Single-line comment, skip to end of line
-            while (i < block_content.len and block_content[i] != '\n') {
+        if (i + 1 < end and block_content[i] == '/' and block_content[i + 1] == '/') {
+            while (i < end and block_content[i] != '\n') {
                 i += 1;
             }
             continue;
         }
 
-        if (i + 1 < block_content.len and block_content[i] == '/' and block_content[i + 1] == '*') {
-            // Multi-line comment, skip to */
+        if (i + 1 < end and block_content[i] == '/' and block_content[i + 1] == '*') {
             i += 2;
-            while (i + 1 < block_content.len) {
+            while (i + 1 < end) {
                 if (block_content[i] == '*' and block_content[i + 1] == '/') {
                     i += 2;
                     break;
@@ -124,7 +125,7 @@ fn isEmptyOrCommentOnlyBlock(
 
         // Found non-comment, non-whitespace content
         // Check if it's just a discard pattern `_ = ...`
-        if (isDiscardPattern(block_content[i..])) {
+        if (isDiscardPattern(block_content[i..], end - i)) {
             return true;
         }
 
@@ -135,27 +136,26 @@ fn isEmptyOrCommentOnlyBlock(
     return true;
 }
 
-/// Check if the remaining content starts with a discard pattern like `_ = ...`
-fn isDiscardPattern(content: []const u8) bool {
-    // Check for `_ =` or `_=` pattern
+/// Check if the content starts with a discard pattern like `_ = ...`
+fn isDiscardPattern(content: []const u8, len: usize) bool {
     var i: usize = 0;
 
     // Skip leading whitespace
-    while (i < content.len and std.ascii.isWhitespace(content[i])) {
+    while (i < len and std.ascii.isWhitespace(content[i])) {
         i += 1;
     }
 
     // Check for `_`
-    if (i >= content.len or content[i] != '_') return false;
+    if (i >= len or content[i] != '_') return false;
     i += 1;
 
     // Skip whitespace
-    while (i < content.len and std.ascii.isWhitespace(content[i])) {
+    while (i < len and std.ascii.isWhitespace(content[i])) {
         i += 1;
     }
 
     // Check for `=`
-    if (i >= content.len or content[i] != '=') return false;
+    if (i >= len or content[i] != '=') return false;
 
     return true;
 }
