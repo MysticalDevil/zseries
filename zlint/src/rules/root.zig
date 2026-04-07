@@ -58,36 +58,76 @@ pub const Rule = struct {
     run: *const fn (*RuleContext) anyerror!void,
 };
 
-/// Helper to add a rule if enabled
-fn addRuleIfEnabled(
-    rules: *std.ArrayList(Rule),
-    allocator: std.mem.Allocator,
-    comptime name: []const u8,
-    comptime module: type,
-    maybe_config: ?Config.BaseRuleConfig,
-) !void {
-    const enabled = if (maybe_config) |cfg| cfg.enabled else true;
-    if (enabled) {
-        try rules.append(allocator, .{
-            .name = name,
-            .run = module.run,
-        });
-    }
-}
+/// Rule definition table - drives rule registration
+const RuleDef = struct {
+    name: []const u8,
+    module: type,
+    getBase: *const fn (Config) ?Config.BaseRuleConfig,
+};
 
-/// Get enabled rules based on configuration
+/// Rule registration table - add new rules here
+const RULE_TABLE: []const RuleDef = &.{
+    .{ .name = "discarded-result", .module = @import("discarded_result.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.discarded_result) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "max-anytype-params", .module = @import("max_anytype_params.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.max_anytype_params) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "no-do-not-optimize-away", .module = @import("no_do_not_optimize_away.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.no_do_not_optimize_away) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "no-empty-catch", .module = @import("no_empty_catch.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.no_empty_catch) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "catch-unreachable", .module = @import("catch_unreachable.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.catch_unreachable) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "defer-return-invalid", .module = @import("defer_return_invalid.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.defer_return_invalid) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "unused-allocator", .module = @import("unused_allocator.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.unused_allocator) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "global-allocator-in-lib", .module = @import("global_allocator_in_lib.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.global_allocator_in_lib) |r| r.base else null;
+        }
+    }.get },
+    .{ .name = "duplicated-code", .module = @import("duplicated_code.zig"), .getBase = struct {
+        fn get(c: Config) ?Config.BaseRuleConfig {
+            return if (c.rules.duplicated_code) |r| r.base else null;
+        }
+    }.get },
+};
+
+/// Get enabled rules based on configuration - table-driven
 pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     var rules = std.ArrayList(Rule).empty;
 
-    try addRuleIfEnabled(&rules, allocator, "discarded-result", @import("discarded_result.zig"), if (config.rules.discarded_result) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "max-anytype-params", @import("max_anytype_params.zig"), if (config.rules.max_anytype_params) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "no-do-not-optimize-away", @import("no_do_not_optimize_away.zig"), if (config.rules.no_do_not_optimize_away) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "no-empty-catch", @import("no_empty_catch.zig"), if (config.rules.no_empty_catch) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "catch-unreachable", @import("catch_unreachable.zig"), if (config.rules.catch_unreachable) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "defer-return-invalid", @import("defer_return_invalid.zig"), if (config.rules.defer_return_invalid) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "unused-allocator", @import("unused_allocator.zig"), if (config.rules.unused_allocator) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "global-allocator-in-lib", @import("global_allocator_in_lib.zig"), if (config.rules.global_allocator_in_lib) |c| c.base else null);
-    try addRuleIfEnabled(&rules, allocator, "duplicated-code", @import("duplicated_code.zig"), if (config.rules.duplicated_code) |c| c.base else null);
+    inline for (RULE_TABLE) |def| {
+        const base = def.getBase(config);
+        const enabled = if (base) |b| b.enabled else true;
+        if (enabled) {
+            try rules.append(allocator, .{
+                .name = def.name,
+                .run = def.module.run,
+            });
+        }
+    }
 
     return rules.toOwnedSlice(allocator);
 }
