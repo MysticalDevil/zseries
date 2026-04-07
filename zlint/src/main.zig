@@ -26,7 +26,9 @@ fn hasBuildZig(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) 
 /// Run zig build in the given directory
 fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, stderr: anytype) !bool {
     if (!quiet) {
-        cli.printInfo(stdout, "Auto-building project (build.zig detected)...", .{}) catch {};
+        cli.printInfo(stdout, "Auto-building project (build.zig detected)...", .{}) catch |err| {
+            std.log.warn("Failed to print info: {}", .{err});
+        };
     }
 
     var child = std.process.spawn(io, .{
@@ -36,7 +38,9 @@ fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, 
         .stderr = .inherit,
     }) catch |err| {
         if (!quiet) {
-            cli.printError(stderr, "Failed to spawn zig build: {}", .{err}) catch {};
+            cli.printError(stderr, "Failed to spawn zig build: {}", .{err}) catch |e| {
+                std.log.warn("Failed to print error: {}", .{e});
+            };
         }
         return false;
     };
@@ -44,7 +48,9 @@ fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, 
     // Wait for process to complete
     const term = child.wait(io) catch |err| {
         if (!quiet) {
-            cli.printError(stderr, "Failed to wait for zig build: {}", .{err}) catch {};
+            cli.printError(stderr, "Failed to wait for zig build: {}", .{err}) catch |e| {
+                std.log.warn("Failed to print error: {}", .{e});
+            };
         }
         return false;
     };
@@ -55,15 +61,19 @@ fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, 
     };
 
     if (!success and !quiet) {
-        cli.printError(stderr, "Build failed", .{}) catch {};
+        cli.printError(stderr, "Build failed", .{}) catch |err| {
+            std.log.warn("Failed to print error: {}", .{err});
+        };
     } else if (success and !quiet) {
-        cli.printSuccess(stdout, "Build completed successfully", .{}) catch {};
+        cli.printSuccess(stdout, "Build completed successfully", .{}) catch |err| {
+            std.log.warn("Failed to print success: {}", .{err});
+        };
     }
 
     return success;
 }
 
-pub fn main(init: std.process.Init) u8 {
+pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
 
     // Setup stdout/stderr writers
@@ -75,38 +85,30 @@ pub fn main(init: std.process.Init) u8 {
     var stderr_file_writer: std.Io.File.Writer = .init(.stderr(), init.io, &stderr_buffer);
     const stderr = &stderr_file_writer.interface;
 
-    const args = init.minimal.args.toSlice(allocator) catch |err| {
-        cli.printError(stderr, "Failed to parse arguments: {}", .{err}) catch {};
-        stderr.flush() catch {};
-        return @intFromEnum(cli.ExitCode.config_error);
-    };
+    const args = try init.minimal.args.toSlice(allocator);
 
     // Parse CLI arguments
     const options = cli.parseArgs(args) catch {
-        cli.printError(stderr, "Invalid format. Use 'text' or 'json'.", .{}) catch {};
-        stderr.flush() catch {};
-        return @intFromEnum(cli.ExitCode.config_error);
+        try cli.printError(stderr, "Invalid format. Use 'text' or 'json'.", .{});
+        try stderr.flush();
+        return error.ConfigError;
     };
 
     // Load configuration
     const cfg_path = options.config_path orelse "zlint.toml";
-    const cfg = config.loadConfig(allocator, cfg_path) catch |err| {
-        cli.printError(stderr, "Failed to load config: {}", .{err}) catch {};
-        stderr.flush() catch {};
-        return @intFromEnum(cli.ExitCode.config_error);
-    };
+    const cfg = try config.loadConfig(allocator, cfg_path);
 
     // Auto-build if build.zig exists and not disabled
     if (!options.no_build and options.file == null) {
         if (hasBuildZig(allocator, init.io, options.root_path)) {
-            const build_success = runZigBuild(init.io, options.root_path, options.quiet, stdout, stderr) catch false;
+            const build_success = try runZigBuild(init.io, options.root_path, options.quiet, stdout, stderr);
             if (!build_success) {
-                stderr.flush() catch {};
-                return @intFromEnum(cli.ExitCode.build_failed);
+                try stderr.flush();
+                return error.BuildFailed;
             }
             if (!options.quiet) {
-                stdout.writeAll("\n") catch {};
-                stdout.flush() catch {};
+                try stdout.writeAll("\n");
+                try stdout.flush();
             }
         }
     }
@@ -114,25 +116,21 @@ pub fn main(init: std.process.Init) u8 {
     // Compile check
     if (!options.no_compile_check) {
         if (!options.quiet) {
-            cli.printInfo(stdout, "Running compile check...", .{}) catch {};
+            try cli.printInfo(stdout, "Running compile check...", .{});
         }
 
-        const compiled = compile_check.checkCompile(allocator, options.root_path) catch |err| {
-            cli.printError(stderr, "Compile check failed: {}", .{err}) catch {};
-            stderr.flush() catch {};
-            return @intFromEnum(cli.ExitCode.compile_failed);
-        };
+        const compiled = try compile_check.checkCompile(allocator, options.root_path);
 
         if (!compiled) {
-            cli.printError(stderr, "Compile check failed. Fix compilation errors before linting.", .{}) catch {};
-            stderr.flush() catch {};
-            return @intFromEnum(cli.ExitCode.compile_failed);
+            try cli.printError(stderr, "Compile check failed. Fix compilation errors before linting.", .{});
+            try stderr.flush();
+            return error.CompileFailed;
         }
 
         if (!options.quiet) {
-            cli.printSuccess(stdout, "Compile check passed", .{}) catch {};
-            stdout.writeAll("\n") catch {};
-            stdout.flush() catch {};
+            try cli.printSuccess(stdout, "Compile check passed", .{});
+            try stdout.writeAll("\n");
+            try stdout.flush();
         }
     }
 
@@ -140,16 +138,12 @@ pub fn main(init: std.process.Init) u8 {
     const files = if (options.file) |single_file|
         &[_][]const u8{single_file}
     else
-        fs_walk.collectFiles(allocator, init.io, options.root_path, cfg) catch |err| {
-            cli.printError(stderr, "Failed to collect files: {}", .{err}) catch {};
-            stderr.flush() catch {};
-            return @intFromEnum(cli.ExitCode.config_error);
-        };
+        try fs_walk.collectFiles(allocator, init.io, options.root_path, cfg);
 
     if (!options.quiet) {
-        cli.printInfo(stdout, "Found {d} files to scan", .{files.len}) catch {};
-        stdout.writeAll("\n") catch {};
-        stdout.flush() catch {};
+        try cli.printInfo(stdout, "Found {d} files to scan", .{files.len});
+        try stdout.writeAll("\n");
+        try stdout.flush();
     }
 
     // Run linting
@@ -158,7 +152,7 @@ pub fn main(init: std.process.Init) u8 {
     for (files) |file_path| {
         var src_file = source_file.SourceFile.init(allocator, init.io, file_path) catch |err| {
             if (!options.quiet) {
-                cli.printWarning(stderr, "Failed to parse {s}: {}", .{ file_path, err }) catch {};
+                try cli.printWarning(stderr, "Failed to parse {s}: {}", .{ file_path, err });
             }
             continue;
         };
@@ -166,7 +160,7 @@ pub fn main(init: std.process.Init) u8 {
         // Parse ignore directives
         const ignores = ignore_directives.IgnoreDirectives.parse(allocator, src_file.content) catch |err| {
             if (!options.quiet) {
-                cli.printWarning(stderr, "Failed to parse ignore directives in {s}: {}", .{ file_path, err }) catch {};
+                try cli.printWarning(stderr, "Failed to parse ignore directives in {s}: {}", .{ file_path, err });
             }
             continue;
         };
@@ -183,7 +177,7 @@ pub fn main(init: std.process.Init) u8 {
         // Get enabled rules and run them
         const enabled_rules = rules.getEnabledRules(cfg, allocator) catch |err| {
             if (!options.quiet) {
-                cli.printWarning(stderr, "Failed to get enabled rules: {}", .{err}) catch {};
+                try cli.printWarning(stderr, "Failed to get enabled rules: {}", .{err});
             }
             continue;
         };
@@ -191,7 +185,7 @@ pub fn main(init: std.process.Init) u8 {
         for (enabled_rules) |rule| {
             rule.run(&ctx) catch |err| {
                 if (!options.quiet) {
-                    cli.printWarning(stderr, "Rule '{s}' failed on {s}: {}", .{ rule.name, file_path, err }) catch {};
+                    try cli.printWarning(stderr, "Rule '{s}' failed on {s}: {}", .{ rule.name, file_path, err });
                 }
             };
         }
@@ -204,17 +198,16 @@ pub fn main(init: std.process.Init) u8 {
     // Output results
     switch (options.format) {
         .text => {
-            text_reporter.writeText(stdout, all_diagnostics.items.items, summary, true) catch {};
+            try text_reporter.writeText(stdout, all_diagnostics.items.items, summary, true);
         },
         .json => {
-            json_reporter.writeJson(allocator, stdout, all_diagnostics.items.items, summary) catch {};
+            try json_reporter.writeJson(allocator, stdout, all_diagnostics.items.items, summary);
         },
     }
-    stdout.flush() catch {};
+    try stdout.flush();
 
     // Return appropriate exit code
     if (summary.errors > 0) {
-        return @intFromEnum(cli.ExitCode.has_errors);
+        return error.HasErrors;
     }
-    return @intFromEnum(cli.ExitCode.ok);
 }
