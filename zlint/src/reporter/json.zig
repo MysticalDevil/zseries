@@ -3,7 +3,7 @@ const Diagnostic = @import("../diagnostic.zig").Diagnostic;
 const Summary = @import("../diagnostic.zig").Summary;
 
 /// Write diagnostics in JSON format
-pub fn writeJson(writer: anytype, diagnostics: []const Diagnostic, summary: Summary) !void {
+pub fn writeJson(writer: *std.Io.Writer, diagnostics: []const Diagnostic, summary: Summary) !void {
     const ok = summary.errors == 0;
 
     try writer.writeAll("{\n");
