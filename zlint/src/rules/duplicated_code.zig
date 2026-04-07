@@ -214,8 +214,9 @@ pub fn findBranchDuplicates(
                 const else_body = if_info.ast.else_expr;
 
                 if (@intFromEnum(then_body) != 0 and else_body != .none) {
-                    const else_body_unwrapped = else_body.unwrap() orelse continue;
-                    try compareBranches(allocator, &ast, source, then_body, else_body_unwrapped, &dups);
+                    if (else_body.unwrap()) |else_body_unwrapped| {
+                        try compareBranches(allocator, &ast, source, then_body, else_body_unwrapped, &dups);
+                    }
                 }
             }
         }
