@@ -12,7 +12,7 @@ pub fn run(ctx: *RuleContext) !void {
     var severity = Severity.warning;
 
     if (ctx.config.rules.no_empty_catch) |config| {
-        severity = Severity.fromString(config.severity) orelse Severity.warning;
+        severity = Severity.fromString(config.base.severity) orelse Severity.warning;
     }
 
     // Find all catch expressions

@@ -13,7 +13,7 @@ pub fn run(ctx: *RuleContext) !void {
     var severity = Severity.err;
 
     if (ctx.config.rules.no_do_not_optimize_away) |config| {
-        severity = Severity.fromString(config.severity) orelse Severity.err;
+        severity = Severity.fromString(config.base.severity) orelse Severity.err;
     }
 
     // Build alias map for this file

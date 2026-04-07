@@ -15,7 +15,7 @@ pub fn run(ctx: *RuleContext) !void {
     var allow_names: []const []const u8 = &.{ "deinit", "free" };
 
     if (ctx.config.rules.discarded_result) |config| {
-        severity = Severity.fromString(config.severity) orelse Severity.err;
+        severity = Severity.fromString(config.base.severity) orelse Severity.err;
         strict = config.strict;
         if (config.allow_names.len > 0) {
             allow_names = config.allow_names;

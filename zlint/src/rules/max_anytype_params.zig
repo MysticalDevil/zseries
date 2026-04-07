@@ -13,7 +13,7 @@ pub fn run(ctx: *RuleContext) !void {
     var max_anytype: usize = 2;
 
     if (ctx.config.rules.max_anytype_params) |config| {
-        severity = Severity.fromString(config.severity) orelse Severity.err;
+        severity = Severity.fromString(config.base.severity) orelse Severity.err;
         max_anytype = config.max;
     }
 

@@ -17,6 +17,12 @@ pub const Config = struct {
         format: []const u8 = "text",
     };
 
+    /// Base configuration for all rules
+    pub const BaseRuleConfig = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+    };
+
     pub const RuleConfigs = struct {
         discarded_result: ?DiscardedResultConfig = null,
         max_anytype_params: ?MaxAnytypeParamsConfig = null,
@@ -30,52 +36,43 @@ pub const Config = struct {
     };
 
     pub const DiscardedResultConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{ .severity = "error" },
         strict: bool = true,
         allow_paths: []const []const u8 = &.{},
         allow_names: []const []const u8 = &.{ "deinit", "free" },
     };
 
     pub const MaxAnytypeParamsConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
         max: usize = 2,
     };
 
     pub const NoDoNotOptimizeAwayConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
     };
 
     pub const NoEmptyCatchConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "warning",
+        base: BaseRuleConfig = .{ .severity = "warning" },
     };
 
     pub const CatchUnreachableConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
     };
 
     pub const DeferReturnInvalidConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
     };
 
     pub const UnusedAllocatorConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
     };
 
     pub const GlobalAllocatorInLibConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
+        base: BaseRuleConfig = .{},
     };
 
     pub const DuplicatedCodeConfig = struct {
-        enabled: bool = true,
-        severity: []const u8 = "warning",
+        base: BaseRuleConfig = .{ .severity = "warning" },
         min_lines: usize = 5,
         min_statements: usize = 3,
     };
