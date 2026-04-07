@@ -18,10 +18,13 @@ pub const Config = struct {
     };
 
     pub const RuleConfigs = struct {
-        discarded_result: ?DiscardedResultConfig = null,
-        max_anytype_params: ?MaxAnytypeParamsConfig = null,
+        discarded_result: ?ZAI001Config = null,
+        max_anytype_params: ?ZAI002Config = null,
+        no_empty_catch: ?ZAI003Config = null,
         no_do_not_optimize_away: ?NoDoNotOptimizeAwayConfig = null,
-        no_empty_catch: ?NoEmptyCatchConfig = null,
+        ZAI001: ?ZAI001Config = null,
+        ZAI002: ?ZAI002Config = null,
+        ZAI003: ?ZAI003Config = null,
         ZAI004: ?ZAI004Config = null,
         ZAI005: ?ZAI005Config = null,
         ZAI006: ?ZAI006Config = null,
@@ -49,6 +52,24 @@ pub const Config = struct {
     };
 
     pub const NoEmptyCatchConfig = struct {
+        enabled: bool = true,
+        severity: []const u8 = "warning",
+    };
+
+    pub const ZAI001Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+        strict: bool = true,
+        allow_names: []const []const u8 = &.{ "deinit", "free" },
+    };
+
+    pub const ZAI002Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "error",
+        max: usize = 2,
+    };
+
+    pub const ZAI003Config = struct {
         enabled: bool = true,
         severity: []const u8 = "warning",
     };

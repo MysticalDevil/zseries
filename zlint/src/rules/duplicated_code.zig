@@ -323,7 +323,7 @@ pub fn run(ctx: *RuleContext) !void {
         try messages.append(allocator, message);
 
         try ctx.addDiagnostic(
-            "ZAI011",
+            "duplicated-code",
             .warning,
             dup.start_line_1,
             1,
@@ -343,7 +343,7 @@ pub fn run(ctx: *RuleContext) !void {
         try messages.append(allocator, message);
 
         try ctx.addDiagnostic(
-            "ZAI011",
+            "duplicated-code",
             .warning,
             dup.start_line_1,
             1,

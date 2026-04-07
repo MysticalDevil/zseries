@@ -79,7 +79,7 @@ fn checkReturns(ctx: *RuleContext, ast: std.zig.Ast, body: std.zig.Ast.Node.Inde
             if (isSuspiciousReturn(ast, return_expr)) {
                 const loc = locations.getNodeLocation(ast, node, ctx.file.content);
                 try ctx.addDiagnostic(
-                    "ZAI005",
+                    "defer-return-invalid",
                     Severity.err,
                     loc.line,
                     loc.column,

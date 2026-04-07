@@ -74,7 +74,7 @@ fn checkNodeForGlobalAlloc(ctx: *RuleContext, ast: std.zig.Ast, node: std.zig.As
         if (isGlobalAllocatorPath(path)) {
             const loc = locations.getNodeLocation(ast, node, ctx.file.content);
             try ctx.addDiagnostic(
-                "ZAI007",
+                "global-allocator-in-lib",
                 Severity.err,
                 loc.line,
                 loc.column,

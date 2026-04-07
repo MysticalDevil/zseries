@@ -52,7 +52,7 @@ fn checkFunction(ctx: *RuleContext, fn_node: std.zig.Ast.Node.Index) !void {
             if (!isParamUsed(ast, fn_node, param.name)) {
                 const loc = locations.getNodeLocation(ast, fn_node, ctx.file.content);
                 try ctx.addDiagnostic(
-                    "ZAI006",
+                    "unused-allocator",
                     Severity.err,
                     loc.line,
                     loc.column,

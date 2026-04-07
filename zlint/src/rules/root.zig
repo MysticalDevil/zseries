@@ -5,6 +5,19 @@ const Severity = @import("../diagnostic.zig").Severity;
 const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
 const Config = @import("../config.zig").Config;
 
+/// Rule ID mapping: internal name -> ZAI code
+const rule_id_map = std.StaticStringMap([]const u8).initComptime(.{
+    .{ "discarded-result", "ZAI001" },
+    .{ "max-anytype-params", "ZAI002" },
+    .{ "no-empty-catch", "ZAI003" },
+    .{ "catch-unreachable", "ZAI004" },
+    .{ "defer-return-invalid", "ZAI005" },
+    .{ "unused-allocator", "ZAI006" },
+    .{ "global-allocator-in-lib", "ZAI007" },
+    .{ "no-do-not-optimize-away", "ZAI008" },
+    .{ "duplicated-code", "ZAI011" },
+});
+
 pub const RuleContext = struct {
     allocator: std.mem.Allocator,
     file: *const SourceFile,
@@ -13,14 +26,18 @@ pub const RuleContext = struct {
     diagnostics: *std.ArrayList(Diagnostic),
 
     pub fn addDiagnostic(self: *RuleContext, rule_id: []const u8, severity: Severity, line: usize, column: usize, message: []const u8) !void {
-        // Check if suppressed
+        // Map internal rule name to ZAI code
+        const zai_code = rule_id_map.get(rule_id) orelse rule_id;
+
+        // Check if suppressed (check both ZAI code and internal name)
+        if (self.ignores.shouldSuppress(zai_code, line)) return;
         if (self.ignores.shouldSuppress(rule_id, line)) return;
 
         // Copy the message to ensure it lives as long as the diagnostic
         const msg_copy = try self.allocator.dupe(u8, message);
 
         try self.diagnostics.append(self.allocator, .{
-            .rule_id = rule_id,
+            .rule_id = zai_code,
             .severity = severity,
             .path = self.file.path,
             .line = line,
@@ -48,10 +65,9 @@ pub const Rule = struct {
     run: *const fn (*RuleContext) anyerror!void,
 };
 
-/// Get all enabled rules
+/// Get enabled rules based on configuration
 pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     var rules = std.ArrayList(Rule).empty;
-    errdefer rules.deinit(allocator);
 
     // Add discarded-result rule if enabled
     if (config.rules.discarded_result) |rule_config| {
@@ -117,82 +133,82 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
         });
     }
 
-    // Add ZAI004 rule if enabled
+    // Add catch-unreachable rule if enabled
     if (config.rules.ZAI004) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
-                .name = "ZAI004",
+                .name = "catch-unreachable",
                 .run = @import("catch_unreachable.zig").run,
             });
         }
     } else {
         // Default: enabled
         try rules.append(allocator, .{
-            .name = "ZAI004",
+            .name = "catch-unreachable",
             .run = @import("catch_unreachable.zig").run,
         });
     }
 
-    // Add ZAI005 rule if enabled
+    // Add defer-return-invalid rule if enabled
     if (config.rules.ZAI005) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
-                .name = "ZAI005",
+                .name = "defer-return-invalid",
                 .run = @import("defer_return_invalid.zig").run,
             });
         }
     } else {
         // Default: enabled
         try rules.append(allocator, .{
-            .name = "ZAI005",
+            .name = "defer-return-invalid",
             .run = @import("defer_return_invalid.zig").run,
         });
     }
 
-    // Add ZAI006 rule if enabled
+    // Add unused-allocator rule if enabled
     if (config.rules.ZAI006) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
-                .name = "ZAI006",
+                .name = "unused-allocator",
                 .run = @import("unused_allocator.zig").run,
             });
         }
     } else {
         // Default: enabled
         try rules.append(allocator, .{
-            .name = "ZAI006",
+            .name = "unused-allocator",
             .run = @import("unused_allocator.zig").run,
         });
     }
 
-    // Add ZAI007 rule if enabled
+    // Add global-allocator-in-lib rule if enabled
     if (config.rules.ZAI007) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
-                .name = "ZAI007",
+                .name = "global-allocator-in-lib",
                 .run = @import("global_allocator_in_lib.zig").run,
             });
         }
     } else {
         // Default: enabled
         try rules.append(allocator, .{
-            .name = "ZAI007",
+            .name = "global-allocator-in-lib",
             .run = @import("global_allocator_in_lib.zig").run,
         });
     }
 
-    // Add ZAI011 rule if enabled
+    // Add duplicated-code rule if enabled
     if (config.rules.ZAI011) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
-                .name = "ZAI011",
+                .name = "duplicated-code",
                 .run = @import("duplicated_code.zig").run,
             });
         }
     } else {
         // Default: enabled
         try rules.append(allocator, .{
-            .name = "ZAI011",
+            .name = "duplicated-code",
             .run = @import("duplicated_code.zig").run,
         });
     }

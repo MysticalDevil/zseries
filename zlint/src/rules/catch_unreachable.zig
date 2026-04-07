@@ -39,7 +39,7 @@ fn checkCatch(ctx: *RuleContext, node: std.zig.Ast.Node.Index) !void {
     if (ast.nodeTag(rhs) == .unreachable_literal) {
         const loc = locations.getNodeLocation(ast, node, ctx.file.content);
         try ctx.addDiagnostic(
-            "ZAI004",
+            "catch-unreachable",
             Severity.err,
             loc.line,
             loc.column,
@@ -59,7 +59,7 @@ fn checkOrElse(ctx: *RuleContext, node: std.zig.Ast.Node.Index) !void {
     if (ast.nodeTag(rhs) == .unreachable_literal) {
         const loc = locations.getNodeLocation(ast, node, ctx.file.content);
         try ctx.addDiagnostic(
-            "ZAI004",
+            "catch-unreachable",
             Severity.err,
             loc.line,
             loc.column,
