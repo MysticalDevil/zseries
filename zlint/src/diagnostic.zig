@@ -58,6 +58,10 @@ pub const DiagnosticCollection = struct {
     }
 
     pub fn deinit(self: *DiagnosticCollection) void {
+        // Free all copied messages
+        for (self.items.items) |d| {
+            self.allocator.free(d.message);
+        }
         self.items.deinit(self.allocator);
     }
 

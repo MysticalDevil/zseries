@@ -26,6 +26,7 @@ pub const Config = struct {
         ZAI005: ?ZAI005Config = null,
         ZAI006: ?ZAI006Config = null,
         ZAI007: ?ZAI007Config = null,
+        ZAI011: ?ZAI011Config = null,
     };
 
     pub const DiscardedResultConfig = struct {
@@ -70,6 +71,13 @@ pub const Config = struct {
     pub const ZAI007Config = struct {
         enabled: bool = true,
         severity: []const u8 = "error",
+    };
+
+    pub const ZAI011Config = struct {
+        enabled: bool = true,
+        severity: []const u8 = "warning",
+        min_lines: usize = 5,
+        min_statements: usize = 3,
     };
 };
 

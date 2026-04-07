@@ -16,13 +16,16 @@ pub const RuleContext = struct {
         // Check if suppressed
         if (self.ignores.shouldSuppress(rule_id, line)) return;
 
+        // Copy the message to ensure it lives as long as the diagnostic
+        const msg_copy = try self.allocator.dupe(u8, message);
+
         try self.diagnostics.append(self.allocator, .{
             .rule_id = rule_id,
             .severity = severity,
             .path = self.file.path,
             .line = line,
             .column = column,
-            .message = message,
+            .message = msg_copy,
         });
     }
 
@@ -175,6 +178,22 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
         try rules.append(allocator, .{
             .name = "ZAI007",
             .run = @import("global_allocator_in_lib.zig").run,
+        });
+    }
+
+    // Add ZAI011 rule if enabled
+    if (config.rules.ZAI011) |rule_config| {
+        if (rule_config.enabled) {
+            try rules.append(allocator, .{
+                .name = "ZAI011",
+                .run = @import("duplicated_code.zig").run,
+            });
+        }
+    } else {
+        // Default: enabled
+        try rules.append(allocator, .{
+            .name = "ZAI011",
+            .run = @import("duplicated_code.zig").run,
         });
     }
 

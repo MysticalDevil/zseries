@@ -4,12 +4,12 @@ const Diagnostic = @import("../diagnostic.zig").Diagnostic;
 const Summary = @import("../diagnostic.zig").Summary;
 const Severity = @import("../diagnostic.zig").Severity;
 
-// Nerd Font icons - using string literals with UTF-8 encoding
-const ICON_FILE = "\xEF\x85\x9B"; // nf-fa-file_code_o (U+F15B)
-const ICON_ERROR = "\xEF\x81\x97"; // nf-fa-times_circle (U+F057)
-const ICON_WARNING = "\xEF\x81\xB1"; // nf-fa-warning (U+F071)
-const ICON_SUCCESS = "\xEF\x81\x98"; // nf-fa-check_circle (U+F058)
-const ICON_X = "\xEF\x80\x8D"; // nf-fa-times (U+F00D)
+// ASCII icons instead of Nerd Fonts
+const ICON_FILE = "";
+const ICON_ERROR = "[X]";
+const ICON_WARNING = "[!]";
+const ICON_SUCCESS = "[OK]";
+const ICON_X = "[X]";
 
 /// Write diagnostics in text format with rich colors using Nerd Fonts
 pub fn writeText(writer: anytype, diagnostics: []const Diagnostic, summary: Summary, use_color: bool) !void {
