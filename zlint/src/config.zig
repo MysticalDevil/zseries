@@ -18,18 +18,15 @@ pub const Config = struct {
     };
 
     pub const RuleConfigs = struct {
-        discarded_result: ?ZAI001Config = null,
-        max_anytype_params: ?ZAI002Config = null,
-        no_empty_catch: ?ZAI003Config = null,
+        discarded_result: ?DiscardedResultConfig = null,
+        max_anytype_params: ?MaxAnytypeParamsConfig = null,
+        no_empty_catch: ?NoEmptyCatchConfig = null,
         no_do_not_optimize_away: ?NoDoNotOptimizeAwayConfig = null,
-        ZAI001: ?ZAI001Config = null,
-        ZAI002: ?ZAI002Config = null,
-        ZAI003: ?ZAI003Config = null,
-        ZAI004: ?ZAI004Config = null,
-        ZAI005: ?ZAI005Config = null,
-        ZAI006: ?ZAI006Config = null,
-        ZAI007: ?ZAI007Config = null,
-        ZAI011: ?ZAI011Config = null,
+        catch_unreachable: ?CatchUnreachableConfig = null,
+        defer_return_invalid: ?DeferReturnInvalidConfig = null,
+        unused_allocator: ?UnusedAllocatorConfig = null,
+        global_allocator_in_lib: ?GlobalAllocatorInLibConfig = null,
+        duplicated_code: ?DuplicatedCodeConfig = null,
     };
 
     pub const DiscardedResultConfig = struct {
@@ -56,45 +53,27 @@ pub const Config = struct {
         severity: []const u8 = "warning",
     };
 
-    pub const ZAI001Config = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
-        strict: bool = true,
-        allow_names: []const []const u8 = &.{ "deinit", "free" },
-    };
-
-    pub const ZAI002Config = struct {
-        enabled: bool = true,
-        severity: []const u8 = "error",
-        max: usize = 2,
-    };
-
-    pub const ZAI003Config = struct {
-        enabled: bool = true,
-        severity: []const u8 = "warning",
-    };
-
-    pub const ZAI004Config = struct {
+    pub const CatchUnreachableConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "error",
     };
 
-    pub const ZAI005Config = struct {
+    pub const DeferReturnInvalidConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "error",
     };
 
-    pub const ZAI006Config = struct {
+    pub const UnusedAllocatorConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "error",
     };
 
-    pub const ZAI007Config = struct {
+    pub const GlobalAllocatorInLibConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "error",
     };
 
-    pub const ZAI011Config = struct {
+    pub const DuplicatedCodeConfig = struct {
         enabled: bool = true,
         severity: []const u8 = "warning",
         min_lines: usize = 5,

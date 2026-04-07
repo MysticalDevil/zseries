@@ -134,7 +134,7 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     }
 
     // Add catch-unreachable rule if enabled
-    if (config.rules.ZAI004) |rule_config| {
+    if (config.rules.catch_unreachable) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
                 .name = "catch-unreachable",
@@ -150,7 +150,7 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     }
 
     // Add defer-return-invalid rule if enabled
-    if (config.rules.ZAI005) |rule_config| {
+    if (config.rules.defer_return_invalid) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
                 .name = "defer-return-invalid",
@@ -166,7 +166,7 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     }
 
     // Add unused-allocator rule if enabled
-    if (config.rules.ZAI006) |rule_config| {
+    if (config.rules.unused_allocator) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
                 .name = "unused-allocator",
@@ -182,7 +182,7 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     }
 
     // Add global-allocator-in-lib rule if enabled
-    if (config.rules.ZAI007) |rule_config| {
+    if (config.rules.global_allocator_in_lib) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
                 .name = "global-allocator-in-lib",
@@ -198,7 +198,7 @@ pub fn getEnabledRules(config: Config, allocator: std.mem.Allocator) ![]Rule {
     }
 
     // Add duplicated-code rule if enabled
-    if (config.rules.ZAI011) |rule_config| {
+    if (config.rules.duplicated_code) |rule_config| {
         if (rule_config.enabled) {
             try rules.append(allocator, .{
                 .name = "duplicated-code",
