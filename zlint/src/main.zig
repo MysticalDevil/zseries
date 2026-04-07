@@ -55,7 +55,7 @@ fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, 
     };
 
     if (!success and !quiet) {
-        cli.printError(stderr, "Build failed. Fix build errors before linting.", .{}) catch {};
+        cli.printError(stderr, "Build failed", .{}) catch {};
     } else if (success and !quiet) {
         cli.printSuccess(stdout, "Build completed successfully", .{}) catch {};
     }
@@ -207,7 +207,7 @@ pub fn main(init: std.process.Init) u8 {
             text_reporter.writeText(stdout, all_diagnostics.items.items, summary, true) catch {};
         },
         .json => {
-            json_reporter.writeJson(stdout, all_diagnostics.items.items, summary) catch {};
+            json_reporter.writeJson(allocator, stdout, all_diagnostics.items.items, summary) catch {};
         },
     }
     stdout.flush() catch {};

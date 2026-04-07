@@ -2,37 +2,70 @@ const std = @import("std");
 const Diagnostic = @import("../diagnostic.zig").Diagnostic;
 const Summary = @import("../diagnostic.zig").Summary;
 
-/// Write diagnostics in JSON format
-pub fn writeJson(writer: *std.Io.Writer, diagnostics: []const Diagnostic, summary: Summary) !void {
-    const ok = summary.errors == 0;
+/// JSON DTO for diagnostic output
+const JsonDiagnostic = struct {
+    rule_id: []const u8,
+    severity: []const u8,
+    path: []const u8,
+    line: usize,
+    column: usize,
+    message: []const u8,
+};
 
-    try writer.writeAll("{\n");
-    try writer.print("  \"ok\": {s},\n", .{if (ok) "true" else "false"});
+const JsonSummary = struct {
+    files_scanned: usize,
+    diagnostics: usize,
+    errors: usize,
+    warnings: usize,
+};
 
-    // Summary
-    try writer.writeAll("  \"summary\": {\n");
-    try writer.print("    \"files_scanned\": {d},\n", .{summary.files_scanned});
-    try writer.print("    \"diagnostics\": {d},\n", .{summary.diagnostics});
-    try writer.print("    \"errors\": {d},\n", .{summary.errors});
-    try writer.print("    \"warnings\": {d}\n", .{summary.warnings});
-    try writer.writeAll("  },\n");
+const JsonReport = struct {
+    ok: bool,
+    summary: JsonSummary,
+    diagnostics: []const JsonDiagnostic,
+};
 
-    // Diagnostics
-    try writer.writeAll("  \"diagnostics\": [\n");
-    for (diagnostics, 0..) |d, i| {
-        try writer.writeAll("    {\n");
-        try writer.print("      \"rule_id\": \"{s}\",\n", .{d.rule_id});
-        try writer.print("      \"severity\": \"{s}\",\n", .{@tagName(d.severity)});
-        try writer.print("      \"path\": \"{s}\",\n", .{d.path});
-        try writer.print("      \"line\": {d},\n", .{d.line});
-        try writer.print("      \"column\": {d},\n", .{d.column});
-        try writer.print("      \"message\": \"{s}\"\n", .{d.message});
-        try writer.writeAll("    }");
-        if (i < diagnostics.len - 1) {
-            try writer.writeAll(",");
-        }
-        try writer.writeAll("\n");
+/// Write diagnostics in JSON format using std.json.Stringify.value
+/// This ensures proper escaping and valid JSON output
+pub fn writeJson(
+    allocator: std.mem.Allocator,
+    writer: *std.Io.Writer,
+    diagnostics: []const Diagnostic,
+    summary: Summary,
+) !void {
+    // Allocate temporary array for JSON DTOs
+    const items = try allocator.alloc(JsonDiagnostic, diagnostics.len);
+    defer allocator.free(items);
+
+    // Map Diagnostic -> JsonDiagnostic
+    for (diagnostics, items) |src, *dst| {
+        dst.* = .{
+            .rule_id = src.rule_id,
+            .severity = @tagName(src.severity),
+            .path = src.path,
+            .line = src.line,
+            .column = src.column,
+            .message = src.message,
+        };
     }
-    try writer.writeAll("  ]\n");
-    try writer.writeAll("}\n");
+
+    // Build the report struct
+    const report = JsonReport{
+        .ok = summary.errors == 0,
+        .summary = .{
+            .files_scanned = summary.files_scanned,
+            .diagnostics = summary.diagnostics,
+            .errors = summary.errors,
+            .warnings = summary.warnings,
+        },
+        .diagnostics = items,
+    };
+
+    // Serialize using std.json.Stringify.value with pretty printing
+    try std.json.Stringify.value(report, .{
+        .whitespace = .indent_2,
+    }, writer);
+
+    // Add trailing newline
+    try writer.writeAll("\n");
 }
