@@ -12,7 +12,7 @@ fn printUserError(err: anyerror) void {
     }
 }
 
-pub fn main(init: std.process.Init) void {
+pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
     const args = init.minimal.args.toSlice(allocator) catch |err| {
         printUserError(err);

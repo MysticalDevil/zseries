@@ -42,7 +42,7 @@ pub fn printError(err: anyerror, context: ?[]const u8) void {
         error.FileNotFound => "File not found",
         error.AccessDenied => "Access denied",
         error.OutOfMemory => "Out of memory",
-        else => "Error",
+        else => "Unknown Error",
     };
     if (context) |ctx| {
         std.debug.print("{s}: {s}\n", .{ err_name, ctx });
