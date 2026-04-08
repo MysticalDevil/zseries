@@ -23,7 +23,9 @@ pub fn promptPassword(allocator: std.mem.Allocator, io: std.Io, prompt: []const 
     var hidden = original;
     hidden.lflag.ECHO = false;
     try std.posix.tcsetattr(fd, .FLUSH, hidden);
-    defer std.posix.tcsetattr(fd, .FLUSH, original) catch {};
+    defer std.posix.tcsetattr(fd, .FLUSH, original) catch |err| {
+        std.log.warn("failed to restore terminal settings: {}", .{err});
+    };
 
     std.debug.print("{s}", .{prompt});
     const value = try promptLine(allocator, io, "");

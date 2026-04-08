@@ -35,7 +35,10 @@ pub const Buffer = struct {
     pub fn putRune(self: *Buffer, x: usize, y: usize, rune: u21, style_id: style.StyleId) void {
         if (x >= self.width or y >= self.height) return;
         var encoded: [4]u8 = undefined;
-        const len = std.unicode.utf8Encode(rune, &encoded) catch return;
+        const len = std.unicode.utf8Encode(rune, &encoded) catch {
+            self.cells[self.index(x, y)] = .{ .bytes = [_]u8{'?'} ** 4, .len = 1, .style_id = style_id };
+            return;
+        };
         self.cells[self.index(x, y)] = .{ .bytes = encoded, .len = @intCast(len), .style_id = style_id };
     }
 

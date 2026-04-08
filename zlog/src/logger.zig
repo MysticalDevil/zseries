@@ -74,7 +74,10 @@ test "logger filters lower levels" {
     var logger = Logger.init(testing.allocator, io, .warn);
     defer logger.deinit();
     try logger.addFileSink(".tmp-zlog-filter.log");
-    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-filter.log") catch {};
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-filter.log") catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove .tmp-zlog-filter.log: {}", .{err}),
+    };
     try logger.log(.info, "skip me", &.{});
     try logger.log(.err, "keep me", &.{});
     const bytes = try std.Io.Dir.cwd().readFileAlloc(io, ".tmp-zlog-filter.log", testing.allocator, .limited(4096));
@@ -89,7 +92,10 @@ test "logger logs messages at the configured minimum level" {
     var logger = Logger.init(testing.allocator, io, .info);
     defer logger.deinit();
     try logger.addFileSink(".tmp-zlog-min-level.log");
-    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-min-level.log") catch {};
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-min-level.log") catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove .tmp-zlog-min-level.log: {}", .{err}),
+    };
 
     try logger.log(.info, "boundary hit", &.{field.Field.string("scope", "main")});
 

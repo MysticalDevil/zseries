@@ -54,63 +54,78 @@ pub const LoggingMiddleware = struct {
     }
 
     pub fn logRequest(self: *LoggingMiddleware, req: RequestContext) void {
-        var fields = std.ArrayList(field.Field).initCapacity(self.allocator, self.config.fields.len) catch return;
-        defer fields.deinit();
-
-        for (self.config.fields) |field_type| {
-            switch (field_type) {
-                .method => fields.append(field.Field.string("method", req.method)) catch continue,
-                .path => fields.append(field.Field.string("path", req.path)) catch continue,
-                .remote_addr => fields.append(field.Field.string("remote_addr", req.remote_addr)) catch continue,
-                .user_agent => {
-                    if (req.getHeader("User-Agent")) |ua| {
-                        fields.append(field.Field.string("user_agent", ua)) catch continue;
-                    }
-                },
-                else => {},
-            }
-        }
-
-        self.logger.log(Level.info, "http_request", fields.items);
+        self.logEvent("http_request", req, null, null, self.config.fields.len);
     }
 
     pub fn logResponse(self: *LoggingMiddleware, req: RequestContext, resp: ResponseContext, start_time: i64) void {
         const duration = std.time.milliTimestamp() - start_time;
+        self.logEvent("http_response", req, &resp, duration, self.config.fields.len + 1);
+    }
 
-        var fields = std.ArrayList(field.Field).initCapacity(self.allocator, self.config.fields.len + 1) catch return;
+    fn logEvent(
+        self: *LoggingMiddleware,
+        message: []const u8,
+        req: RequestContext,
+        resp: ?*const ResponseContext,
+        duration: ?i64,
+        field_capacity: usize,
+    ) void {
+        var fields = std.ArrayList(field.Field).initCapacity(self.allocator, field_capacity) catch |err| {
+            std.log.warn("failed to allocate log fields for {s}: {}", .{ message, err });
+            return;
+        };
         defer fields.deinit();
 
+        self.appendConfiguredFields(&fields, req, resp, duration);
+        self.logger.log(Level.info, message, fields.items);
+    }
+
+    fn appendConfiguredFields(
+        self: *LoggingMiddleware,
+        fields: *std.ArrayList(field.Field),
+        req: RequestContext,
+        resp: ?*const ResponseContext,
+        duration: ?i64,
+    ) void {
         for (self.config.fields) |field_type| {
             switch (field_type) {
-                .method => fields.append(field.Field.string("method", req.method)) catch continue,
-                .path => fields.append(field.Field.string("path", req.path)) catch continue,
-                .status => fields.append(field.Field.uint("status", resp.status)) catch continue,
-                .duration => fields.append(field.Field.int("duration_ms", duration)) catch continue,
+                .method => self.appendField(fields, field.Field.string("method", req.method)),
+                .path => self.appendField(fields, field.Field.string("path", req.path)),
+                .status => if (resp) |response| {
+                    self.appendField(fields, field.Field.uint("status", response.status));
+                },
+                .duration => if (duration) |elapsed_ms| {
+                    self.appendField(fields, field.Field.int("duration_ms", elapsed_ms));
+                },
                 .request_id => {
                     if (req.getHeader(self.config.request_id_header)) |rid| {
-                        fields.append(field.Field.string("request_id", rid)) catch continue;
+                        self.appendField(fields, field.Field.string("request_id", rid));
                     }
                 },
-                .remote_addr => fields.append(field.Field.string("remote_addr", req.remote_addr)) catch continue,
+                .remote_addr => self.appendField(fields, field.Field.string("remote_addr", req.remote_addr)),
                 .user_agent => {
                     if (req.getHeader("User-Agent")) |ua| {
-                        fields.append(field.Field.string("user_agent", ua)) catch continue;
+                        self.appendField(fields, field.Field.string("user_agent", ua));
                     }
                 },
                 .content_length => {
                     if (req.getHeader("Content-Length")) |cl| {
-                        fields.append(field.Field.string("content_length", cl)) catch continue;
+                        self.appendField(fields, field.Field.string("content_length", cl));
                     }
                 },
                 .content_type => {
                     if (req.getHeader("Content-Type")) |ct| {
-                        fields.append(field.Field.string("content_type", ct)) catch continue;
+                        self.appendField(fields, field.Field.string("content_type", ct));
                     }
                 },
             }
         }
+    }
 
-        self.logger.log(Level.info, "http_response", fields.items);
+    fn appendField(_: *LoggingMiddleware, fields: *std.ArrayList(field.Field), value: field.Field) void {
+        fields.append(value) catch |err| {
+            std.log.warn("failed to append log field: {}", .{err});
+        };
     }
 
     pub fn execute(self: *LoggingMiddleware, req: RequestContext, handler_fn: *const fn (RequestContext) anyerror!ResponseContext) anyerror!ResponseContext {

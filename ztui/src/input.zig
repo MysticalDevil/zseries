@@ -25,7 +25,9 @@ pub const RawMode = struct {
     }
 
     pub fn leave(self: RawMode) void {
-        std.posix.tcsetattr(std.posix.STDIN_FILENO, .FLUSH, self.original) catch {};
+        std.posix.tcsetattr(std.posix.STDIN_FILENO, .FLUSH, self.original) catch |err| {
+            std.log.warn("failed to restore raw mode: {}", .{err});
+        };
     }
 };
 

@@ -53,7 +53,9 @@ pub const Dashboard = struct {
         const raw = try input_mod.RawMode.enter();
         defer raw.leave();
         try terminal.enterScreen();
-        defer terminal.restoreScreen() catch {};
+        defer terminal.restoreScreen() catch |err| {
+            std.log.warn("failed to restore dashboard screen: {}", .{err});
+        };
 
         var last_hash: ?u64 = null;
         var last_size: ?u64 = null;

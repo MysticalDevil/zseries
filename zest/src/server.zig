@@ -49,7 +49,10 @@ pub const Server = struct {
         std.log.info("zest server listening on {any}", .{address});
 
         while (self.running.load(.seq_cst)) {
-            const socket = self.server_socket orelse break;
+            const socket = if (self.server_socket) |server_socket|
+                server_socket
+            else
+                break;
             const conn = socket.accept(self.io) catch |err| switch (err) {
                 error.SocketNotListening => break,
                 else => {

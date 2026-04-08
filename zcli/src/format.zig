@@ -11,13 +11,9 @@ pub fn writeJson(writer: *std.Io.Writer, value: anytype, options: JsonOptions) !
         .whitespace = if (options.indent) |indent| .{ .indent_level = 1, .indent = indent } else null,
     };
     if (options.use_color) {
-        var buf: std.Io.Writer.Allocating = .undefined;
-        buf.init(undefined);
-        defer buf.deinit();
-        try std.json.stringify(value, fmt_options, &buf.writer);
-        const text = try buf.toOwnedSlice();
-        defer std.heap.page_allocator.free(text);
-        try color.writeStyled(writer, true, .value, text);
+        try writer.writeAll("\x1b[36m");
+        try std.json.stringify(value, fmt_options, writer);
+        try writer.writeAll("\x1b[0m");
     } else {
         try std.json.stringify(value, fmt_options, writer);
     }

@@ -89,7 +89,10 @@ test "file sink writes and flushes" {
     const testing = std.testing;
     const io = std.Io.Threaded.init_single_threaded;
     var file_sink = try FileSink.initPath(io, ".tmp-zlog-sink.log");
-    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-sink.log") catch {};
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-sink.log") catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove .tmp-zlog-sink.log: {}", .{err}),
+    };
     const sink = file_sink.sink();
     try sink.write("hello\n");
     try sink.flush();
@@ -103,7 +106,10 @@ test "file sink appends sequential writes" {
     const testing = std.testing;
     const io = std.Io.Threaded.init_single_threaded;
     var file_sink = try FileSink.initPath(io, ".tmp-zlog-sink-append.log");
-    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-sink-append.log") catch {};
+    defer std.Io.Dir.cwd().deleteFile(io, ".tmp-zlog-sink-append.log") catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove .tmp-zlog-sink-append.log: {}", .{err}),
+    };
     const sink = file_sink.sink();
 
     try sink.write("first\n");
