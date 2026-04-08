@@ -10,7 +10,10 @@ test "windows runtime smoke: tempfile lifecycle in relative dir" {
         error.PathAlreadyExists => {},
         else => return err,
     };
-    defer cwd.deleteTree(io, parent_name) catch {};
+    defer cwd.deleteTree(io, parent_name) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove {s}: {}", .{ parent_name, err }),
+    };
 
     var file = try ztmpfile.tempfileIn(std.testing.allocator, parent_name);
 

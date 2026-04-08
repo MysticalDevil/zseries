@@ -5,7 +5,10 @@ test "tempdirIn creates under explicit parent and cleans up" {
     const io = std.Io.Threaded.global_single_threaded.io();
     const parent = try ztmpfile.compat.createPath(std.testing.allocator, "it-parent-");
     defer std.testing.allocator.free(parent);
-    defer ztmpfile.compat.deletePath(parent) catch {};
+    defer ztmpfile.compat.deletePath(parent) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to cleanup {s}: {}", .{ parent, err }),
+    };
 
     var dir = try ztmpfile.tempdirIn(std.testing.allocator, parent);
     const path_copy = try std.testing.allocator.dupe(u8, dir.path());
@@ -20,7 +23,10 @@ test "tempfileIn writes reopens persists with same content" {
     const io = std.Io.Threaded.global_single_threaded.io();
     const parent = try ztmpfile.compat.createPath(std.testing.allocator, "it-parent-file-");
     defer std.testing.allocator.free(parent);
-    defer ztmpfile.compat.deletePath(parent) catch {};
+    defer ztmpfile.compat.deletePath(parent) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to cleanup {s}: {}", .{ parent, err }),
+    };
 
     var file = try ztmpfile.tempfileIn(std.testing.allocator, parent);
     var write_buffer: [256]u8 = undefined;

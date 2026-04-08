@@ -47,7 +47,10 @@ pub const TempDir = struct {
     pub fn cleanup(self: *TempDir) void {
         if (self.cleaned) return;
 
-        adapter.deleteTree(self.io, self.parent_path, self.name) catch {};
+        adapter.deleteTree(self.io, self.parent_path, self.name) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => std.debug.panic("failed to cleanup temp dir {s}: {}", .{ self.path_buf, err }),
+        };
         self.allocator.free(self.path_buf);
         self.allocator.free(self.parent_path);
         self.allocator.free(self.name);

@@ -32,12 +32,20 @@ pub fn deleteFile(io: Io, parent_path: []const u8, name: []const u8) !void {
 }
 
 fn readEnvironValue(allocator: std.mem.Allocator, io: Io, key: []const u8) !?[]u8 {
-    const env_file = std.Io.Dir.openFileAbsolute(io, "/proc/self/environ", .{ .mode = .read_only }) catch return null;
+    const env_file = std.Io.Dir.openFileAbsolute(io, "/proc/self/environ", .{ .mode = .read_only }) catch |err| switch (err) {
+        error.FileNotFound,
+        error.AccessDenied,
+        error.PermissionDenied,
+        => return null,
+        else => return err,
+    };
     defer env_file.close(io);
 
     var read_buffer: [8192]u8 = undefined;
     var file_reader = env_file.reader(io, &read_buffer);
-    const got = file_reader.interface.readSliceShort(&read_buffer) catch return null;
+    const got = file_reader.interface.readSliceShort(&read_buffer) catch |err| switch (err) {
+        error.ReadFailed => return null,
+    };
     const data = read_buffer[0..got];
 
     var it = std.mem.splitScalar(u8, data, 0);

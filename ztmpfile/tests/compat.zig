@@ -31,7 +31,10 @@ test "compat createPath honors prefix and returns absolute path" {
     const io = std.Io.Threaded.global_single_threaded.io();
     const path = try ztmpfile.compat.createPath(std.testing.allocator, "compat-prefix-");
     defer std.testing.allocator.free(path);
-    defer ztmpfile.compat.deletePath(path) catch {};
+    defer ztmpfile.compat.deletePath(path) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to cleanup {s}: {}", .{ path, err }),
+    };
 
     try std.testing.expect(std.fs.path.isAbsolute(path));
     const base = std.fs.path.basename(path);

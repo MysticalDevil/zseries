@@ -18,38 +18,46 @@ pub const CreatedFile = struct {
 };
 
 pub fn createUniqueDir(allocator: std.mem.Allocator, io: Io, parent_path: []const u8, options: CreateOptions) !CreatedDir {
-    var parent_dir = try openParent(io, parent_path);
-    defer parent_dir.close(io);
-
-    var attempt: usize = 0;
-    while (attempt < options.max_attempts) : (attempt += 1) {
-        const name = try makeName(allocator, io, options);
-        errdefer allocator.free(name);
-
-        parent_dir.createDir(io, name, .default_dir) catch |err| switch (err) {
-            error.PathAlreadyExists => {
-                allocator.free(name);
-                continue;
-            },
-            else => return err,
-        };
-
-        const parent_copy = try allocator.dupe(u8, parent_path);
-        errdefer allocator.free(parent_copy);
-        const full_path = try std.fs.path.join(allocator, &.{ parent_path, name });
-        errdefer allocator.free(full_path);
-
-        return .{
-            .parent_path = parent_copy,
-            .name = name,
-            .full_path = full_path,
-        };
-    }
-
-    return error.PathAlreadyExists;
+    const created = try createUniqueResource(void, allocator, io, parent_path, options, createDirEntry, noopCleanup);
+    return .{
+        .parent_path = created.parts.parent_path,
+        .name = created.parts.name,
+        .full_path = created.parts.full_path,
+    };
 }
 
 pub fn createUniqueFile(allocator: std.mem.Allocator, io: Io, parent_path: []const u8, options: CreateOptions) !CreatedFile {
+    const created = try createUniqueResource(std.Io.File, allocator, io, parent_path, options, createFileEntry, closeFileCleanup);
+    return .{
+        .parent_path = created.parts.parent_path,
+        .name = created.parts.name,
+        .full_path = created.parts.full_path,
+        .file = created.payload,
+    };
+}
+
+const CreatedPathParts = struct {
+    parent_path: []u8,
+    name: []u8,
+    full_path: []u8,
+};
+
+fn CreatedResource(comptime Payload: type) type {
+    return struct {
+        parts: CreatedPathParts,
+        payload: Payload,
+    };
+}
+
+fn createUniqueResource(
+    comptime Payload: type,
+    allocator: std.mem.Allocator,
+    io: Io,
+    parent_path: []const u8,
+    options: CreateOptions,
+    creator: *const fn (Dir, Io, []const u8) anyerror!Payload,
+    cleanup: *const fn (Io, Payload) void,
+) !CreatedResource(Payload) {
     var parent_dir = try openParent(io, parent_path);
     defer parent_dir.close(io);
 
@@ -58,11 +66,7 @@ pub fn createUniqueFile(allocator: std.mem.Allocator, io: Io, parent_path: []con
         const name = try makeName(allocator, io, options);
         errdefer allocator.free(name);
 
-        const file = parent_dir.createFile(io, name, .{
-            .read = true,
-            .truncate = false,
-            .exclusive = true,
-        }) catch |err| switch (err) {
+        const payload = creator(parent_dir, io, name) catch |err| switch (err) {
             error.PathAlreadyExists => {
                 allocator.free(name);
                 continue;
@@ -70,17 +74,13 @@ pub fn createUniqueFile(allocator: std.mem.Allocator, io: Io, parent_path: []con
             else => return err,
         };
 
-        const parent_copy = try allocator.dupe(u8, parent_path);
-        errdefer allocator.free(parent_copy);
-        const full_path = try std.fs.path.join(allocator, &.{ parent_path, name });
-        errdefer allocator.free(full_path);
+        const parts = try createPathParts(allocator, parent_path, name);
+        errdefer {
+            cleanup(io, payload);
+            freePathParts(allocator, parts);
+        }
 
-        return .{
-            .parent_path = parent_copy,
-            .name = name,
-            .full_path = full_path,
-            .file = file,
-        };
+        return .{ .parts = parts, .payload = payload };
     }
 
     return error.PathAlreadyExists;
@@ -125,4 +125,42 @@ fn randomAlphaNum(allocator: std.mem.Allocator, io: Io, len: usize) ![]u8 {
         random[idx] = alphabet[b % alphabet.len];
     }
     return random;
+}
+
+fn createDirEntry(parent_dir: Dir, io: Io, name: []const u8) !void {
+    try parent_dir.createDir(io, name, .default_dir);
+}
+
+fn createFileEntry(parent_dir: Dir, io: Io, name: []const u8) !std.Io.File {
+    return parent_dir.createFile(io, name, .{
+        .read = true,
+        .truncate = false,
+        .exclusive = true,
+    });
+}
+
+fn createPathParts(allocator: std.mem.Allocator, parent_path: []const u8, name: []u8) !CreatedPathParts {
+    const parent_copy = try allocator.dupe(u8, parent_path);
+    errdefer allocator.free(parent_copy);
+
+    const full_path = try std.fs.path.join(allocator, &.{ parent_path, name });
+    errdefer allocator.free(full_path);
+
+    return .{
+        .parent_path = parent_copy,
+        .name = name,
+        .full_path = full_path,
+    };
+}
+
+fn freePathParts(allocator: std.mem.Allocator, parts: CreatedPathParts) void {
+    allocator.free(parts.full_path);
+    allocator.free(parts.parent_path);
+    allocator.free(parts.name);
+}
+
+fn noopCleanup(_: Io, _: void) void {}
+
+fn closeFileCleanup(io: Io, file: std.Io.File) void {
+    file.close(io);
 }

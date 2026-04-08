@@ -61,7 +61,10 @@ pub const NamedTempFile = struct {
         if (self.cleaned) return;
 
         self.file_handle.close(self.io);
-        adapter.deleteFile(self.io, self.parent_path, self.name) catch {};
+        adapter.deleteFile(self.io, self.parent_path, self.name) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => std.debug.panic("failed to cleanup temp file {s}: {}", .{ self.path_buf, err }),
+        };
 
         self.allocator.free(self.path_buf);
         self.allocator.free(self.parent_path);

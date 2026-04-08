@@ -5,7 +5,10 @@ test "builder applies prefix suffix and randLen lower bound" {
     const io = std.Io.Threaded.global_single_threaded.io();
     const parent = try ztmpfile.compat.createPath(std.testing.allocator, "unit-parent-");
     defer std.testing.allocator.free(parent);
-    defer ztmpfile.compat.deletePath(parent) catch {};
+    defer ztmpfile.compat.deletePath(parent) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to cleanup {s}: {}", .{ parent, err }),
+    };
 
     var b = ztmpfile.Builder.init();
     const result = b.inDir(parent).prefix("pre-").suffix("-suf").randLen(1);
@@ -41,7 +44,10 @@ test "tempdir persist clears path and keeps directory" {
 
     const kept = dir.persist();
     defer std.testing.allocator.free(kept);
-    defer ztmpfile.compat.deletePath(kept) catch {};
+    defer ztmpfile.compat.deletePath(kept) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to cleanup {s}: {}", .{ kept, err }),
+    };
 
     try std.testing.expectEqual(@as(usize, 0), dir.path().len);
 
@@ -57,7 +63,10 @@ test "named tempfile persist clears path and preserves renamed file" {
 
     const kept = try file.persist(target);
     defer std.testing.allocator.free(kept);
-    defer std.Io.Dir.deleteFileAbsolute(io, kept) catch {};
+    defer std.Io.Dir.deleteFileAbsolute(io, kept) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove {s}: {}", .{ kept, err }),
+    };
 
     try std.testing.expectEqual(@as(usize, 0), file.path().len);
 
@@ -109,7 +118,10 @@ test "named tempfile persist then second persist returns AlreadyClosed" {
 
     const kept = try file.persist(target);
     defer std.testing.allocator.free(kept);
-    defer std.Io.Dir.deleteFileAbsolute(io, kept) catch {};
+    defer std.Io.Dir.deleteFileAbsolute(io, kept) catch |err| switch (err) {
+        error.FileNotFound => {},
+        else => std.debug.panic("failed to remove {s}: {}", .{ kept, err }),
+    };
 
     try std.testing.expectError(error.AlreadyClosed, file.persist(target));
 }

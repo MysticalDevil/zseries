@@ -6,7 +6,10 @@ test "wasi runtime smoke: tempdir may succeed or return fs capability error" {
     if (dir_or_err) |*dir| {
         const kept = dir.persist();
         defer std.testing.allocator.free(kept);
-        ztmpfile.compat.deletePath(kept) catch {};
+        ztmpfile.compat.deletePath(kept) catch |err| switch (err) {
+            error.FileNotFound => {},
+            else => std.debug.panic("failed to cleanup wasi tempdir {s}: {}", .{ kept, err }),
+        };
     } else |err| switch (err) {
         error.AccessDenied,
         error.PermissionDenied,
