@@ -35,7 +35,7 @@ pub const JwtMiddleware = struct {
         };
     }
 
-    fn hookImpl(ctx: *anyopaque) anyerror!void {
+    fn hookImpl(ctx: *anyopaque) !void {
         const self = @as(*JwtMiddleware, @ptrCast(@alignCast(ctx)));
 
         const token_str = self.extractToken(ctx) orelse {
@@ -88,7 +88,7 @@ pub fn createHook(verifier: *Verifier, config: MiddlewareConfig) zestBeforeHook 
     };
 }
 
-fn genericHook(ptr: *anyopaque) anyerror!void {
+fn genericHook(ptr: *anyopaque) !void {
     const stored = @as(*MiddlewareConfig, @ptrCast(@alignCast(ptr)));
     // This is a stub - actual implementation needs zest Context integration
     // Would use stored.token_source, stored.strategy, etc.

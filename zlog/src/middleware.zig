@@ -128,7 +128,7 @@ pub const LoggingMiddleware = struct {
         };
     }
 
-    pub fn execute(self: *LoggingMiddleware, req: RequestContext, handler_fn: *const fn (RequestContext) anyerror!ResponseContext) anyerror!ResponseContext {
+    pub fn execute(self: *LoggingMiddleware, req: RequestContext, handler_fn: *const fn (RequestContext) anyerror!ResponseContext) !ResponseContext {
         const start_time = std.time.milliTimestamp();
 
         self.logRequest(req);
