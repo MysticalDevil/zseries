@@ -138,10 +138,8 @@ pub const Server = struct {
             header_count += 1;
         }
 
-        const status = @as(http.Status, @enumFromInt(ctx.response_status));
-
         try request.respond(body, .{
-            .status = status,
+            .status = ctx.response_status,
             .extra_headers = extra_headers[0..header_count],
         });
     }

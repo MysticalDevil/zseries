@@ -13,7 +13,7 @@ pub const Context = struct {
     headers: std.StringHashMap([]const u8),
     request_body: ?[]const u8,
 
-    response_status: u16,
+    response_status: http.Status,
     response_headers: std.StringHashMap([]const u8),
     response_body: std.ArrayList(u8),
 
@@ -34,7 +34,7 @@ pub const Context = struct {
             .params = params,
             .headers = std.StringHashMap([]const u8).init(allocator),
             .request_body = null,
-            .response_status = 200,
+            .response_status = .ok,
             .response_headers = std.StringHashMap([]const u8).init(allocator),
             .response_body = std.ArrayList(u8).init(allocator),
             .context_data = std.StringHashMap(*anyopaque).init(allocator),
@@ -72,11 +72,11 @@ pub const Context = struct {
     }
 
     pub fn status(self: *Context, code: u16) void {
-        self.response_status = code;
+        self.response_status = @enumFromInt(code);
     }
 
     pub fn statusCode(self: *Context, status_code: Status) void {
-        self.response_status = status_code.code();
+        self.response_status = status_code;
     }
 
     pub fn setHeader(self: *Context, name: []const u8, value: []const u8) !void {
@@ -84,48 +84,48 @@ pub const Context = struct {
     }
 
     pub fn text(self: *Context, code: u16, content: []const u8) !void {
-        self.response_status = code;
+        self.response_status = @enumFromInt(code);
         try self.setHeader("Content-Type", "text/plain; charset=utf-8");
         try self.response_body.appendSlice(content);
     }
 
     pub fn textStatus(self: *Context, status_code: Status, content: []const u8) !void {
-        self.response_status = status_code.code();
+        self.response_status = status_code;
         try self.setHeader("Content-Type", "text/plain; charset=utf-8");
         try self.response_body.appendSlice(content);
     }
 
     pub fn json(self: *Context, code: u16, value: anytype) !void {
-        self.response_status = code;
+        self.response_status = @enumFromInt(code);
         try self.setHeader("Content-Type", "application/json");
         try std.json.stringify(value, .{}, self.response_body.writer());
     }
 
     pub fn jsonStatus(self: *Context, status_code: Status, value: anytype) !void {
-        self.response_status = status_code.code();
+        self.response_status = status_code;
         try self.setHeader("Content-Type", "application/json");
         try std.json.stringify(value, .{}, self.response_body.writer());
     }
 
     pub fn html(self: *Context, code: u16, content: []const u8) !void {
-        self.response_status = code;
+        self.response_status = @enumFromInt(code);
         try self.setHeader("Content-Type", "text/html; charset=utf-8");
         try self.response_body.appendSlice(content);
     }
 
     pub fn htmlStatus(self: *Context, status_code: Status, content: []const u8) !void {
-        self.response_status = status_code.code();
+        self.response_status = status_code;
         try self.setHeader("Content-Type", "text/html; charset=utf-8");
         try self.response_body.appendSlice(content);
     }
 
     pub fn redirect(self: *Context, location: []const u8, code: u16) !void {
-        self.response_status = code;
+        self.response_status = @enumFromInt(code);
         try self.setHeader("Location", location);
     }
 
     pub fn redirectStatus(self: *Context, location: []const u8, status_code: Status) !void {
-        self.response_status = status_code.code();
+        self.response_status = status_code;
         try self.setHeader("Location", location);
     }
 

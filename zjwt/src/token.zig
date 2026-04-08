@@ -54,53 +54,16 @@ pub const Parts = struct {
 };
 
 pub fn base64UrlEncode(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
-    const encoded = try allocator.alloc(u8, std.base64.standard.Encoder.calcSize(data.len));
-    const written = std.base64.standard.Encoder.encode(encoded, data);
-    if (written != encoded.len) return error.EncodingFailed;
-
-    // Convert to base64url (replace + with -, / with _, remove padding)
-    for (encoded) |*c| {
-        c.* = switch (c.*) {
-            '+' => '-',
-            '/' => '_',
-            else => c.*,
-        };
-    }
-
-    // Remove padding
-    var len = encoded.len;
-    while (len > 0 and encoded[len - 1] == '=') {
-        len -= 1;
-    }
-
-    return allocator.realloc(encoded, len);
+    const encoded = try allocator.alloc(u8, std.base64.url_safe_no_pad.Encoder.calcSize(data.len));
+    const written = std.base64.url_safe_no_pad.Encoder.encode(encoded, data);
+    if (written.len != encoded.len) return error.EncodingFailed;
+    return encoded;
 }
 
 pub fn base64UrlDecode(allocator: std.mem.Allocator, data: []const u8) ![]const u8 {
-    // Calculate padding needed
-    const padding_needed = (4 - (data.len % 4)) % 4;
-    const padded_len = data.len + padding_needed;
-
-    const padded = try allocator.alloc(u8, padded_len);
-    defer allocator.free(padded);
-
-    @memcpy(padded[0..data.len], data);
-    for (padded[data.len..]) |*c| {
-        c.* = '=';
-    }
-
-    // Convert from base64url (replace - with +, _ with /)
-    for (padded) |*c| {
-        c.* = switch (c.*) {
-            '-' => '+',
-            '_' => '/',
-            else => c.*,
-        };
-    }
-
-    const decoded_len = try std.base64.standard.Decoder.calcSizeForSlice(padded);
+    const decoded_len = try std.base64.url_safe_no_pad.Decoder.calcSizeForSlice(data);
     const decoded = try allocator.alloc(u8, decoded_len);
-    try std.base64.standard.Decoder.decode(decoded, padded);
+    try std.base64.url_safe_no_pad.Decoder.decode(decoded, data);
 
     return decoded;
 }

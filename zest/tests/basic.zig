@@ -52,7 +52,7 @@ test "context response building" {
     defer ctx.deinit();
 
     try ctx.textStatus(zest.Status.ok, "Hello, World!");
-    try testing.expectEqual(@as(u16, 200), ctx.response_status);
+    try testing.expectEqual(@as(u16, 200), @intFromEnum(ctx.response_status));
     try testing.expectEqualStrings("Hello, World!", ctx.response_body.items);
 }
 
@@ -75,7 +75,7 @@ test "context json response" {
     };
 
     try ctx.jsonStatus(zest.Status.ok, data);
-    try testing.expectEqual(@as(u16, 200), ctx.response_status);
+    try testing.expectEqual(@as(u16, 200), @intFromEnum(ctx.response_status));
     try testing.expect(std.mem.indexOf(u8, ctx.response_body.items, "\"name\":\"test\"") != null);
 }
 
@@ -119,18 +119,13 @@ test "middleware executes hooks" {
 }
 
 test "status enum values" {
-    try testing.expectEqual(@as(u16, 200), zest.Status.ok.code());
-    try testing.expectEqual(@as(u16, 404), zest.Status.not_found.code());
-    try testing.expectEqual(@as(u16, 500), zest.Status.internal_server_error.code());
+    try testing.expectEqual(@as(u16, 200), @intFromEnum(zest.Status.ok));
+    try testing.expectEqual(@as(u16, 404), @intFromEnum(zest.Status.not_found));
+    try testing.expectEqual(@as(u16, 500), @intFromEnum(zest.Status.internal_server_error));
 }
 
 test "status category checks" {
-    try testing.expect(zest.Status.ok.isSuccess());
-    try testing.expect(!zest.Status.ok.isError());
-
-    try testing.expect(zest.Status.not_found.isClientError());
-    try testing.expect(zest.Status.not_found.isError());
-
-    try testing.expect(zest.Status.internal_server_error.isServerError());
-    try testing.expect(zest.Status.internal_server_error.isError());
+    try testing.expectEqual(std.http.Status.Class.success, zest.Status.ok.class());
+    try testing.expectEqual(std.http.Status.Class.client_error, zest.Status.not_found.class());
+    try testing.expectEqual(std.http.Status.Class.server_error, zest.Status.internal_server_error.class());
 }

@@ -1,4 +1,5 @@
 const std = @import("std");
+const Terminal = std.Io.Terminal;
 
 pub const Style = enum {
     plain,
@@ -12,30 +13,60 @@ pub const Style = enum {
 };
 
 pub fn enabled(env: *const std.process.Environ.Map) bool {
-    return env.get("NO_COLOR") == null;
+    if (env.get("NO_COLOR")) |value| return value.len == 0;
+    if (env.get("CLICOLOR_FORCE")) |value| return value.len != 0;
+    return true;
 }
 
-fn prefix(style: Style) []const u8 {
+fn terminalColor(style: Style) ?Terminal.Color {
     return switch (style) {
-        .plain => "",
-        .title => "\x1b[1;96m",
-        .heading => "\x1b[1;94m",
-        .command => "\x1b[1;92m",
-        .flag => "\x1b[1;93m",
-        .value => "\x1b[36m",
-        .muted => "\x1b[2;37m",
-        .accent => "\x1b[1;95m",
+        .plain => null,
+        .title => .bright_cyan,
+        .heading => .bright_blue,
+        .command => .bright_green,
+        .flag => .bright_yellow,
+        .value => .cyan,
+        .muted => .dim,
+        .accent => .bright_magenta,
+    };
+}
+
+fn ansiCode(color: Terminal.Color) []const u8 {
+    return switch (color) {
+        .black => "\x1b[30m",
+        .red => "\x1b[31m",
+        .green => "\x1b[32m",
+        .yellow => "\x1b[33m",
+        .blue => "\x1b[34m",
+        .magenta => "\x1b[35m",
+        .cyan => "\x1b[36m",
+        .white => "\x1b[37m",
+        .bright_black => "\x1b[90m",
+        .bright_red => "\x1b[91m",
+        .bright_green => "\x1b[92m",
+        .bright_yellow => "\x1b[93m",
+        .bright_blue => "\x1b[94m",
+        .bright_magenta => "\x1b[95m",
+        .bright_cyan => "\x1b[96m",
+        .bright_white => "\x1b[97m",
+        .dim => "\x1b[2m",
+        .bold => "\x1b[1m",
+        .reset => "\x1b[0m",
     };
 }
 
 pub fn writeStyled(writer: *std.Io.Writer, use_color: bool, style: Style, text: []const u8) !void {
-    if (!use_color or style == .plain) {
+    const color = terminalColor(style) orelse {
+        try writer.writeAll(text);
+        return;
+    };
+    if (!use_color) {
         try writer.writeAll(text);
         return;
     }
-    try writer.writeAll(prefix(style));
+    try writer.writeAll(ansiCode(color));
     try writer.writeAll(text);
-    try writer.writeAll("\x1b[0m");
+    try writer.writeAll(ansiCode(.reset));
 }
 
 test "enabled respects NO_COLOR" {

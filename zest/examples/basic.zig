@@ -40,7 +40,7 @@ pub fn main() !void {
             log.log(.info, "request_completed", &.{
                 zlog.Field.string("method", @tagName(ctx.method)),
                 zlog.Field.string("path", ctx.path),
-                zlog.Field.uint("status", ctx.response_status),
+                zlog.Field.uint("status", @intFromEnum(ctx.response_status)),
                 zlog.Field.int("duration_ms", duration),
             });
         }
@@ -75,9 +75,9 @@ fn getUserHandler(ctx: *zest.Context) !void {
     const user_id_opt = ctx.param("id");
     if (user_id_opt == null) {
         const ErrorResponse = struct {
-            error: []const u8,
+            @"error": []const u8,
         };
-        try ctx.jsonStatus(zest.Status.bad_request, ErrorResponse{ .error = "Missing user id" });
+        try ctx.jsonStatus(zest.Status.bad_request, ErrorResponse{ .@"error" = "Missing user id" });
         return;
     }
     const user_id = user_id_opt.?;
@@ -107,7 +107,7 @@ fn createUserHandler(ctx: *zest.Context) !void {
     };
 
     const user = try ctx.bodyJson(User) orelse {
-        try ctx.jsonStatus(zest.Status.bad_request, .{ .error = "Invalid JSON body" });
+        try ctx.jsonStatus(zest.Status.bad_request, .{ .@"error" = "Invalid JSON body" });
         return;
     };
 
