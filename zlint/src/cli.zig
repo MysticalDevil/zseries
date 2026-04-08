@@ -10,132 +10,216 @@ pub const Options = struct {
     no_compile_check: bool = false,
     no_build: bool = false,
     quiet: bool = false,
+    color: ColorMode = .auto,
+    no_collapse: bool = false,
+    max_per_group: usize = 3,
+    context_lines: usize = 1,
 
     pub const Format = enum {
         text,
         json,
     };
+
+    pub const ColorMode = enum {
+        auto,
+        always,
+        never,
+    };
 };
 
 /// Print compact colorful help text
-fn printHelp() !void {
-    var out: std.Io.Writer.Allocating = .init(std.heap.page_allocator);
-    defer out.deinit();
-    const writer = &out.writer;
+fn printHelp(io: std.Io, use_color: bool) !void {
+    var buffer: [4096]u8 = undefined;
+    var file_writer: std.Io.File.Writer = .init(.stdout(), io, &buffer);
+    const writer = &file_writer.interface;
 
     // Title
-    try zcli.color.writeStyled(writer, true, .command, "zlint");
+    try zcli.color.writeStyled(writer, use_color, .command, "zlint");
     try writer.writeAll(" - Zig project linter\n\n");
 
     // Usage
-    try zcli.color.writeStyled(writer, true, .heading, "USAGE\n");
-    try writer.writeAll("  zlint [options]\n\n");
+    try zcli.color.writeStyled(writer, use_color, .heading, "USAGE\n");
+    try writer.writeAll("  zlint [options] [file]\n\n");
 
     // Options
-    try zcli.color.writeStyled(writer, true, .heading, "OPTIONS\n");
+    try zcli.color.writeStyled(writer, use_color, .heading, "OPTIONS\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "-f, --format");
+    try zcli.color.writeStyled(writer, use_color, .flag, "[file]");
+    try writer.writeAll("                     File to lint (optional)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-f, --format");
     try writer.writeAll(" ");
-    try zcli.color.writeStyled(writer, true, .value, "<FORMAT>");
+    try zcli.color.writeStyled(writer, use_color, .value, "<FORMAT>");
     try writer.writeAll("      Output: text or json (default: text)\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "-c, --config");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-c, --config");
     try writer.writeAll(" ");
-    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
+    try zcli.color.writeStyled(writer, use_color, .value, "<PATH>");
     try writer.writeAll("      Config file (default: zlint.toml)\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "-r, --root");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-r, --root");
     try writer.writeAll(" ");
-    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
+    try zcli.color.writeStyled(writer, use_color, .value, "<PATH>");
     try writer.writeAll("        Project root (default: .)\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "    --file");
-    try writer.writeAll(" ");
-    try zcli.color.writeStyled(writer, true, .value, "<PATH>");
-    try writer.writeAll("        Lint single file only\n");
-
-    try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "    --no-compile-check");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --no-compile-check");
     try writer.writeAll("     Skip compile check\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "    --no-build");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --no-build");
     try writer.writeAll("           Skip auto zig build\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "-q, --quiet");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-q, --quiet");
     try writer.writeAll("              Suppress output\n");
 
     try writer.writeAll("  ");
-    try zcli.color.writeStyled(writer, true, .flag, "-h, --help");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --color");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, use_color, .value, "<MODE>");
+    try writer.writeAll("      Color: auto|always|never (default: auto)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --no-collapse");
+    try writer.writeAll("       Show all diagnostics without grouping\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --max-per-group");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, use_color, .value, "<N>");
+    try writer.writeAll("   Max diagnostics per group (default: 3)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "    --context-lines");
+    try writer.writeAll(" ");
+    try zcli.color.writeStyled(writer, use_color, .value, "<N>");
+    try writer.writeAll("   Context lines around target (default: 1)\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-h, --help");
     try writer.writeAll("               Show this help\n\n");
 
     // Exit codes
-    try zcli.color.writeStyled(writer, true, .heading, "EXIT CODES\n");
+    try zcli.color.writeStyled(writer, use_color, .heading, "EXIT CODES\n");
     try writer.writeAll("  0  No issues or only warnings\n");
     try writer.writeAll("  1  At least one error\n");
-    try writer.writeAll("  2  Compile check failed\n");
+    try writer.writeAll("  2  Compile/build gate failed\n");
     try writer.writeAll("  3  Config or CLI error\n");
-    try writer.writeAll("  4  Build failed\n\n");
+    try writer.writeAll("  4  Build failed (strict_exit mode)\n\n");
 
     // Examples
-    try zcli.color.writeStyled(writer, true, .heading, "EXAMPLES\n");
+    try zcli.color.writeStyled(writer, use_color, .heading, "EXAMPLES\n");
     try writer.writeAll("  zlint                    Lint current directory\n");
     try writer.writeAll("  zlint -r ./my-project    Lint specific project\n");
-    try writer.writeAll("  zlint --file main.zig    Lint single file\n");
+    try writer.writeAll("  zlint main.zig           Lint single file\n");
+    try writer.writeAll("  zlint --file main.zig    Lint single file (explicit)\n");
     try writer.writeAll("  zlint -f json            Output as JSON\n");
 
-    const help_text = try out.toOwnedSlice();
-    defer std.heap.page_allocator.free(help_text);
-    std.debug.print("{s}", .{help_text});
+    try file_writer.flush();
 }
 
 /// Parse command line arguments using zcli
-pub fn parseArgs(args: []const []const u8) !Options {
+pub fn parseArgs(io: std.Io, args: []const []const u8, use_color: bool) !Options {
     // Check for help first
     if (zcli.args.hasFlag(args, "--help") or zcli.args.hasFlag(args, "-h")) {
-        try printHelp();
+        try printHelp(io, use_color);
         std.process.exit(0);
     }
 
     var options = Options{};
 
-    // Parse single file
-    if (zcli.args.flagValue(args, "--file")) |value| {
-        options.file = value;
-    }
+    var i: usize = 1;
+    while (i < args.len) : (i += 1) {
+        const arg = args[i];
 
-    // Parse format
-    if (zcli.args.flagValue(args, "--format") orelse zcli.args.flagValue(args, "-f")) |value| {
-        if (std.mem.eql(u8, value, "text")) {
-            options.format = .text;
-        } else if (std.mem.eql(u8, value, "json")) {
-            options.format = .json;
-        } else {
-            return error.InvalidFormat;
+        if (matchesOption(arg, "--format", "-f")) {
+            const value = try takeValue(args, &i, error.InvalidFormat);
+            options.format = parseFormat(value) orelse return error.InvalidFormat;
+            continue;
         }
-    }
 
-    // Parse config path
-    if (zcli.args.flagValue(args, "--config") orelse zcli.args.flagValue(args, "-c")) |value| {
-        options.config_path = value;
-    }
+        if (matchesOption(arg, "--config", "-c")) {
+            options.config_path = try takeValue(args, &i, error.InvalidOption);
+            continue;
+        }
 
-    // Parse root path
-    if (zcli.args.flagValue(args, "--root") orelse zcli.args.flagValue(args, "-r")) |value| {
-        options.root_path = value;
-    }
+        if (matchesOption(arg, "--root", "-r")) {
+            options.root_path = try takeValue(args, &i, error.InvalidOption);
+            continue;
+        }
 
-    // Parse flags
-    options.no_compile_check = zcli.args.hasFlag(args, "--no-compile-check");
-    options.no_build = zcli.args.hasFlag(args, "--no-build");
-    options.quiet = zcli.args.hasFlag(args, "--quiet") or zcli.args.hasFlag(args, "-q");
+        if (std.mem.eql(u8, arg, "--file")) {
+            options.file = try takeValue(args, &i, error.InvalidOption);
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--no-compile-check")) {
+            options.no_compile_check = true;
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--no-build")) {
+            options.no_build = true;
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--quiet") or std.mem.eql(u8, arg, "-q")) {
+            options.quiet = true;
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--color")) {
+            const value = try takeValue(args, &i, error.InvalidOption);
+            options.color = std.meta.stringToEnum(Options.ColorMode, value) orelse return error.InvalidOption;
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--no-collapse")) {
+            options.no_collapse = true;
+            continue;
+        }
+
+        if (std.mem.eql(u8, arg, "--max-per-group") or std.mem.eql(u8, arg, "--context-lines")) {
+            const value = try takeValue(args, &i, error.InvalidOption);
+            const parsed = std.fmt.parseInt(usize, value, 10) catch return error.InvalidOption;
+            if (std.mem.eql(u8, arg, "--max-per-group")) {
+                options.max_per_group = parsed;
+            } else {
+                options.context_lines = parsed;
+            }
+            continue;
+        }
+
+        if (!std.mem.startsWith(u8, arg, "-") and options.file == null) {
+            options.file = arg;
+            continue;
+        }
+
+        return error.InvalidOption;
+    }
 
     return options;
+}
+
+fn matchesOption(arg: []const u8, long: []const u8, short: []const u8) bool {
+    return std.mem.eql(u8, arg, long) or std.mem.eql(u8, arg, short);
+}
+
+fn parseFormat(value: []const u8) ?Options.Format {
+    if (std.mem.eql(u8, value, "text")) return .text;
+    if (std.mem.eql(u8, value, "json")) return .json;
+    return null;
+}
+
+fn takeValue(args: []const []const u8, i: *usize, comptime err: anyerror) ![]const u8 {
+    if (i.* + 1 >= args.len) return err;
+    i.* += 1;
+    return args[i.*];
 }
 
 /// Exit codes as per PLAN.md
@@ -149,48 +233,28 @@ pub const ExitCode = enum(u8) {
 
 /// Log level for styled output
 pub const LogLevel = enum {
-    error_level,
-    warning_level,
-    info_level,
-    success_level,
+    err,
+    warning,
+    info,
+    success,
 };
 
-/// Generic styled print function
-fn printStyled(writer: anytype, level: LogLevel, comptime fmt: []const u8, args: anytype) !void {
+/// Emit a styled message
+pub fn emit(writer: *std.Io.Writer, use_color: bool, level: LogLevel, comptime fmt: []const u8, args: anytype) !void {
     const style: zcli.color.Style = switch (level) {
-        .error_level => .title,
-        .warning_level => .flag,
-        .info_level => .heading,
-        .success_level => .command,
+        .err => .title,
+        .warning => .flag,
+        .info => .heading,
+        .success => .command,
     };
     const prefix = switch (level) {
-        .error_level => "error: ",
-        .warning_level => "warning: ",
-        .info_level => "info: ",
-        .success_level => "success: ",
+        .err => "error: ",
+        .warning => "warning: ",
+        .info => "info: ",
+        .success => "success: ",
     };
 
-    try zcli.color.writeStyled(writer, true, style, prefix);
+    try zcli.color.writeStyled(writer, use_color, style, prefix);
     try writer.print(fmt, args);
     try writer.writeByte('\n');
-}
-
-/// Print styled error message
-pub fn printError(writer: anytype, comptime fmt: []const u8, args: anytype) !void {
-    try printStyled(writer, .error_level, fmt, args);
-}
-
-/// Print styled warning message
-pub fn printWarning(writer: anytype, comptime fmt: []const u8, args: anytype) !void {
-    try printStyled(writer, .warning_level, fmt, args);
-}
-
-/// Print styled info message
-pub fn printInfo(writer: anytype, comptime fmt: []const u8, args: anytype) !void {
-    try printStyled(writer, .info_level, fmt, args);
-}
-
-/// Print styled success message
-pub fn printSuccess(writer: anytype, comptime fmt: []const u8, args: anytype) !void {
-    try printStyled(writer, .success_level, fmt, args);
 }

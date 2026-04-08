@@ -58,7 +58,6 @@ pub const DiagnosticCollection = struct {
     }
 
     pub fn deinit(self: *DiagnosticCollection) void {
-        // Free all copied messages
         for (self.items.items) |d| {
             self.allocator.free(d.message);
         }
@@ -66,7 +65,15 @@ pub const DiagnosticCollection = struct {
     }
 
     pub fn add(self: *DiagnosticCollection, diagnostic: Diagnostic) !void {
-        try self.items.append(self.allocator, diagnostic);
+        const msg_copy = try self.allocator.dupe(u8, diagnostic.message);
+        try self.items.append(self.allocator, .{
+            .rule_id = diagnostic.rule_id,
+            .severity = diagnostic.severity,
+            .path = diagnostic.path,
+            .line = diagnostic.line,
+            .column = diagnostic.column,
+            .message = msg_copy,
+        });
     }
 
     pub fn getSummary(self: DiagnosticCollection) Summary {

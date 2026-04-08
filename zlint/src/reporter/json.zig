@@ -41,7 +41,7 @@ pub fn writeJson(
     for (diagnostics, items) |src, *dst| {
         dst.* = .{
             .rule_id = src.rule_id,
-            .severity = @tagName(src.severity),
+            .severity = src.severity.toString(),
             .path = src.path,
             .line = src.line,
             .column = src.column,

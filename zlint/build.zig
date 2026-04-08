@@ -32,6 +32,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "zlint", .module = mod },
                 .{ .name = "zcli", .module = zcli_dep.module("zcli") },
+                .{ .name = "ztoml", .module = ztoml_dep.module("ztoml") },
             },
         }),
     });

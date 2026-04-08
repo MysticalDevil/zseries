@@ -1,5 +1,4 @@
 const std = @import("std");
-const zcli = @import("zcli");
 const cli = @import("cli.zig");
 const config = @import("config.zig");
 const compile_check = @import("compile_check.zig");
@@ -11,72 +10,51 @@ const rules = @import("rules/root.zig");
 const text_reporter = @import("reporter/text.zig");
 const json_reporter = @import("reporter/json.zig");
 
-/// Check if build.zig exists in the given directory
-fn hasBuildZig(allocator: std.mem.Allocator, io: std.Io, root_path: []const u8) bool {
-    const cwd = std.Io.Dir.cwd();
-    const build_zig_path = std.fs.path.join(allocator, &.{ root_path, "build.zig" }) catch return false;
-    defer allocator.free(build_zig_path);
+fn shouldUseColor(io: std.Io, mode: cli.Options.ColorMode) bool {
+    return switch (mode) {
+        .always => true,
+        .never => false,
+        .auto => std.Io.File.stdout().supportsAnsiEscapeCodes(io) catch false,
+    };
+}
 
-    // Try to open build.zig and immediately close it
-    const file = cwd.openFile(io, build_zig_path, .{}) catch return false;
-    file.close(io);
+fn hasBuildZig(io: std.Io, root_path: []const u8) bool {
+    const cwd = std.Io.Dir.cwd();
+    cwd.access(io, root_path, .{}) catch return false;
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    const joined = std.fmt.bufPrint(&path_buf, "{s}/build.zig", .{root_path}) catch return false;
+    cwd.access(io, joined, .{}) catch return false;
     return true;
 }
 
-/// Run zig build in the given directory
-fn runZigBuild(io: std.Io, root_path: []const u8, quiet: bool, stdout: anytype, stderr: anytype) !bool {
-    if (!quiet) {
-        cli.printInfo(stdout, "Auto-building project (build.zig detected)...", .{}) catch |err| {
-            std.log.warn("Failed to print info: {}", .{err});
-        };
-    }
+fn emitCheckOutput(writer: *std.Io.Writer, stderr_writer: *std.Io.Writer, result: compile_check.CheckResult) !void {
+    if (result.stdout.len > 0) try writer.writeAll(result.stdout);
+    if (result.stderr.len > 0) try stderr_writer.writeAll(result.stderr);
+}
 
-    var child = std.process.spawn(io, .{
-        .argv = &.{ "zig", "build" },
-        .cwd = .{ .path = root_path },
-        .stdout = .inherit,
-        .stderr = .inherit,
-    }) catch |err| {
-        if (!quiet) {
-            cli.printError(stderr, "Failed to spawn zig build: {}", .{err}) catch |e| {
-                std.log.warn("Failed to print error: {}", .{e});
-            };
-        }
-        return false;
-    };
+fn shouldFail(summary: diagnostic.Summary, cfg: config.Config) bool {
+    if (summary.errors > 0) return true;
+    if (cfg.fail_on_warning and summary.warnings > 0) return true;
+    return false;
+}
 
-    // Wait for process to complete
-    const term = child.wait(io) catch |err| {
-        if (!quiet) {
-            cli.printError(stderr, "Failed to wait for zig build: {}", .{err}) catch |e| {
-                std.log.warn("Failed to print error: {}", .{e});
-            };
-        }
-        return false;
-    };
+fn resolveConfigPath(allocator: std.mem.Allocator, root_path: []const u8, maybe_cfg_path: ?[]const u8) ![]const u8 {
+    const cfg_path = maybe_cfg_path orelse "zlint.toml";
+    if (std.fs.path.isAbsolute(cfg_path)) return allocator.dupe(u8, cfg_path);
+    return std.fs.path.join(allocator, &.{ root_path, cfg_path });
+}
 
-    const success = switch (term) {
-        .exited => |code| code == 0,
-        else => false,
-    };
-
-    if (!success and !quiet) {
-        cli.printError(stderr, "Build failed", .{}) catch |err| {
-            std.log.warn("Failed to print error: {}", .{err});
-        };
-    } else if (success and !quiet) {
-        cli.printSuccess(stdout, "Build completed successfully", .{}) catch |err| {
-            std.log.warn("Failed to print success: {}", .{err});
-        };
-    }
-
-    return success;
+fn isDirectoryPath(io: std.Io, path: []const u8) bool {
+    const cwd = std.Io.Dir.cwd();
+    var dir = cwd.openDir(io, path, .{}) catch return false;
+    defer dir.close(io);
+    return true;
 }
 
 pub fn main(init: std.process.Init) !void {
     const allocator = init.arena.allocator();
 
-    // Setup stdout/stderr writers
     var stdout_buffer: [4096]u8 = undefined;
     var stdout_file_writer: std.Io.File.Writer = .init(.stdout(), init.io, &stdout_buffer);
     const stdout = &stdout_file_writer.interface;
@@ -85,129 +63,138 @@ pub fn main(init: std.process.Init) !void {
     var stderr_file_writer: std.Io.File.Writer = .init(.stderr(), init.io, &stderr_buffer);
     const stderr = &stderr_file_writer.interface;
 
+    const startup_color = shouldUseColor(init.io, .auto);
     const args = try init.minimal.args.toSlice(allocator);
-
-    // Parse CLI arguments
-    const options = cli.parseArgs(args) catch {
-        try cli.printError(stderr, "Invalid format. Use 'text' or 'json'.", .{});
+    const options = cli.parseArgs(init.io, args, startup_color) catch |err| {
+        const msg = switch (err) {
+            error.InvalidFormat => "Invalid format. Use 'text' or 'json'.",
+            error.InvalidOption => "Invalid CLI option or missing option value.",
+            else => "Failed to parse command line arguments.",
+        };
+        try cli.emit(stderr, startup_color, .err, "{s}", .{msg});
         try stderr.flush();
-        return error.ConfigError;
+        std.process.exit(@intFromEnum(cli.ExitCode.config_error));
     };
 
-    // Load configuration
-    const cfg_path = options.config_path orelse "zlint.toml";
-    const cfg = try config.loadConfig(allocator, cfg_path);
+    const use_color = shouldUseColor(init.io, options.color);
 
-    // Auto-build if build.zig exists and not disabled
-    if (!options.no_build and options.file == null) {
-        if (hasBuildZig(allocator, init.io, options.root_path)) {
-            const build_success = try runZigBuild(init.io, options.root_path, options.quiet, stdout, stderr);
-            if (!build_success) {
-                try stderr.flush();
-                return error.BuildFailed;
-            }
-            if (!options.quiet) {
-                try stdout.writeAll("\n");
-                try stdout.flush();
-            }
+    var run_root = options.root_path;
+    var run_file = options.file;
+
+    var owned_root: ?[]const u8 = null;
+    defer if (owned_root) |p| allocator.free(p);
+
+    var owned_file: ?[]const u8 = null;
+    defer if (owned_file) |p| allocator.free(p);
+
+    if (options.file) |input_path| {
+        const candidate = if (std.fs.path.isAbsolute(input_path))
+            input_path
+        else blk: {
+            const joined = try std.fs.path.join(allocator, &.{ options.root_path, input_path });
+            break :blk joined;
+        };
+
+        if (isDirectoryPath(init.io, candidate)) {
+            run_root = candidate;
+            run_file = null;
+            if (!std.fs.path.isAbsolute(input_path)) owned_root = candidate;
+        } else if (!std.fs.path.isAbsolute(input_path)) {
+            run_file = candidate;
+            owned_file = candidate;
         }
     }
 
-    // Compile check
-    if (!options.no_compile_check) {
-        if (!options.quiet) {
-            try cli.printInfo(stdout, "Running compile check...", .{});
-        }
+    const cfg_path = try resolveConfigPath(allocator, run_root, options.config_path);
+    const cfg = config.loadConfig(allocator, init.io, cfg_path) catch {
+        try cli.emit(stderr, use_color, .err, "Failed to load configuration: {s}", .{cfg_path});
+        try stderr.flush();
+        std.process.exit(@intFromEnum(cli.ExitCode.config_error));
+    };
 
-        const compiled = try compile_check.checkCompile(allocator, options.root_path);
+    const has_build_zig = hasBuildZig(init.io, run_root);
 
-        if (!compiled) {
-            try cli.printError(stderr, "Compile check failed. Fix compilation errors before linting.", .{});
+    if (!options.no_build and run_file == null and has_build_zig) {
+        if (!options.quiet) try cli.emit(stdout, use_color, .info, "Running build gate (zig build)...", .{});
+
+        var result = try compile_check.runBuild(allocator, init.io, run_root);
+        defer result.deinit(allocator);
+
+        if (!result.ok) {
+            try emitCheckOutput(stdout, stderr, result);
             try stderr.flush();
-            return error.CompileFailed;
+            const code: cli.ExitCode = if (cfg.strict_exit) .build_failed else .compile_failed;
+            std.process.exit(@intFromEnum(code));
         }
-
-        if (!options.quiet) {
-            try cli.printSuccess(stdout, "Compile check passed", .{});
-            try stdout.writeAll("\n");
-            try stdout.flush();
-        }
+    } else if (!options.no_compile_check and run_file == null and !has_build_zig) {
+        if (!options.quiet) try cli.emit(stdout, use_color, .info, "No build.zig found; skipping build gate", .{});
     }
 
-    // Collect files to scan
-    const files = if (options.file) |single_file|
+    const files = if (run_file) |single_file|
         &[_][]const u8{single_file}
     else
-        try fs_walk.collectFiles(allocator, init.io, options.root_path, cfg);
+        try fs_walk.collectFiles(allocator, init.io, run_root, cfg);
 
-    if (!options.quiet) {
-        try cli.printInfo(stdout, "Found {d} files to scan", .{files.len});
-        try stdout.writeAll("\n");
-        try stdout.flush();
-    }
-
-    // Run linting
     var all_diagnostics = diagnostic.DiagnosticCollection.init(allocator);
+    defer all_diagnostics.deinit();
 
+    const enabled_rules = rules.getEnabledRules(cfg, allocator) catch {
+        try cli.emit(stderr, use_color, .err, "Failed to build enabled rule list", .{});
+        std.process.exit(@intFromEnum(cli.ExitCode.config_error));
+    };
+
+    var files_linted: usize = 0;
     for (files) |file_path| {
-        var src_file = source_file.SourceFile.init(allocator, init.io, file_path) catch |err| {
-            if (!options.quiet) {
-                try cli.printWarning(stderr, "Failed to parse {s}: {}", .{ file_path, err });
-            }
+        var src_file = source_file.SourceFile.init(allocator, init.io, file_path) catch {
             continue;
         };
+        defer src_file.deinit();
 
-        // Parse ignore directives
-        const ignores = ignore_directives.IgnoreDirectives.parse(allocator, src_file.content) catch |err| {
-            if (!options.quiet) {
-                try cli.printWarning(stderr, "Failed to parse ignore directives in {s}: {}", .{ file_path, err });
-            }
-            continue;
+        var scratch_arena = std.heap.ArenaAllocator.init(allocator);
+        defer scratch_arena.deinit();
+        const scratch_alloc = scratch_arena.allocator();
+
+        const ignores = ignore_directives.IgnoreDirectives.parse(scratch_alloc, src_file.content) catch |err| switch (err) {
+            error.UnknownRuleId => {
+                try cli.emit(stderr, use_color, .err, "Unknown suppression rule id in file: {s}", .{file_path});
+                std.process.exit(@intFromEnum(cli.ExitCode.config_error));
+            },
+            error.OutOfMemory => return err,
         };
 
-        // Create rule context
         var ctx = rules.RuleContext{
             .allocator = allocator,
             .file = &src_file,
             .config = cfg,
             .ignores = &ignores,
-            .diagnostics = &all_diagnostics.items,
-        };
-
-        // Get enabled rules and run them
-        const enabled_rules = rules.getEnabledRules(cfg, allocator) catch |err| {
-            if (!options.quiet) {
-                try cli.printWarning(stderr, "Failed to get enabled rules: {}", .{err});
-            }
-            continue;
+            .diagnostics = &all_diagnostics,
         };
 
         for (enabled_rules) |rule| {
-            rule.run(&ctx) catch |err| {
+            rule.run(&ctx) catch |rule_err| {
                 if (!options.quiet) {
-                    try cli.printWarning(stderr, "Rule '{s}' failed on {s}: {}", .{ rule.name, file_path, err });
+                    try cli.emit(stderr, use_color, .warning, "Rule '{s}' failed on {s}: {}", .{ rule.name, file_path, rule_err });
                 }
             };
         }
+
+        files_linted += 1;
     }
 
-    // Get summary
     var summary = all_diagnostics.getSummary();
-    summary.files_scanned = files.len;
+    summary.files_scanned = files_linted;
 
-    // Output results
     switch (options.format) {
-        .text => {
-            try text_reporter.writeText(stdout, all_diagnostics.items.items, summary, true);
-        },
-        .json => {
-            try json_reporter.writeJson(allocator, stdout, all_diagnostics.items.items, summary);
-        },
+        .text => try text_reporter.writeText(allocator, init.io, stdout, all_diagnostics.items.items, summary, .{
+            .use_color = use_color,
+            .collapse_duplicates = !options.no_collapse,
+            .max_per_group = options.max_per_group,
+            .context_lines = options.context_lines,
+        }),
+        .json => try json_reporter.writeJson(allocator, stdout, all_diagnostics.items.items, summary),
     }
     try stdout.flush();
 
-    // Return appropriate exit code
-    if (summary.errors > 0) {
-        return error.HasErrors;
-    }
+    const exit_code: cli.ExitCode = if (shouldFail(summary, cfg)) .has_errors else .ok;
+    std.process.exit(@intFromEnum(exit_code));
 }

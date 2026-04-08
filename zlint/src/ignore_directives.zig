@@ -1,4 +1,5 @@
 const std = @import("std");
+const rule_ids = @import("rule_ids.zig");
 
 /// Ignore directives for a file
 pub const IgnoreDirectives = struct {
@@ -33,7 +34,7 @@ pub const IgnoreDirectives = struct {
     }
 
     /// Parse ignore directives from source content
-    pub fn parse(allocator: std.mem.Allocator, content: []const u8) !IgnoreDirectives {
+    pub fn parse(allocator: std.mem.Allocator, content: []const u8) (std.mem.Allocator.Error || ParseError)!IgnoreDirectives {
         var directives = IgnoreDirectives.init(allocator);
         errdefer directives.deinit();
 
@@ -41,16 +42,20 @@ pub const IgnoreDirectives = struct {
         var line_no: usize = 1;
 
         while (lines.next()) |line| : (line_no += 1) {
-            // Look for zlint:ignore or zlint:file-ignore
-            if (std.mem.indexOf(u8, line, "zlint:")) |idx| {
-                const directive = line[idx + 6 ..];
-                if (std.mem.startsWith(u8, directive, "ignore ")) {
-                    const rule_id = std.mem.trim(u8, directive[7..], " \t\r");
-                    try directives.addLineIgnore(line_no, rule_id);
-                } else if (std.mem.startsWith(u8, directive, "file-ignore ")) {
-                    const rule_id = std.mem.trim(u8, directive[12..], " \t\r");
-                    try directives.addFileIgnore(rule_id);
-                }
+            const comment_idx = std.mem.indexOf(u8, line, "//") orelse continue;
+            const comment = std.mem.trim(u8, line[comment_idx + 2 ..], " \t");
+
+            if (std.mem.startsWith(u8, comment, "zlint:file-ignore ")) {
+                const rule_id = std.mem.trim(u8, comment["zlint:file-ignore ".len..], " \t\r");
+                if (!rule_ids.isKnown(rule_id)) return ParseError.UnknownRuleId;
+                try directives.addFileIgnore(rule_id);
+                continue;
+            }
+
+            if (std.mem.startsWith(u8, comment, "zlint:ignore ")) {
+                const rule_id = std.mem.trim(u8, comment["zlint:ignore ".len..], " \t\r");
+                if (!rule_ids.isKnown(rule_id)) return ParseError.UnknownRuleId;
+                try directives.addLineIgnore(line_no, rule_id);
             }
         }
 
@@ -83,4 +88,7 @@ pub const IgnoreDirectives = struct {
 
         return false;
     }
+};
+pub const ParseError = error{
+    UnknownRuleId,
 };

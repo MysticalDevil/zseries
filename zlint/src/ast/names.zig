@@ -1,69 +1,81 @@
 const std = @import("std");
 
+const Tag = std.zig.Ast.Node.Tag;
+const Index = std.zig.Ast.Node.Index;
+
+/// Result of traversing one step in field access chain
+const StepResult = enum {
+    field,
+    identifier,
+    other,
+};
+
+/// Get the next step in field access chain
+fn nextFieldAccessStep(
+    ast: std.zig.Ast,
+    current: Index,
+    out_lhs: *Index,
+    out_token: *std.zig.Ast.TokenIndex,
+) StepResult {
+    const tags = ast.nodes.items(.tag);
+    const tag = tags[@intFromEnum(current)];
+
+    switch (tag) {
+        .field_access => {
+            const data = ast.nodeData(current);
+            out_lhs.* = data.node_and_token[0];
+            out_token.* = data.node_and_token[1];
+            return .field;
+        },
+        .identifier => {
+            const tokens = ast.nodes.items(.main_token);
+            out_token.* = tokens[@intFromEnum(current)];
+            return .identifier;
+        },
+        else => return .other,
+    }
+}
+
 /// Extract the full dotted path from a field access chain
-pub fn extractPath(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, buf: *std.ArrayList(u8), gpa: std.mem.Allocator) !?[]const u8 {
+pub fn extractPath(ast: std.zig.Ast, node: Index, buf: *std.ArrayList(u8), gpa: std.mem.Allocator) !?[]const u8 {
     buf.clearRetainingCapacity();
 
     var current = node;
     var first = true;
+    var lhs: Index = undefined;
+    var token: std.zig.Ast.TokenIndex = undefined;
 
     while (true) {
-        const tags = ast.nodes.items(.tag);
-        const tokens = ast.nodes.items(.main_token);
-        const node_idx = @intFromEnum(current);
-        const tag = tags[node_idx];
-
-        switch (tag) {
-            .field_access => {
-                const data = ast.nodeData(current);
-                const lhs = data.node_and_token[0];
-                const field_token = data.node_and_token[1];
-                const field_name = ast.tokenSlice(field_token);
-
-                if (!first) {
-                    try buf.insert(gpa, 0, '.');
-                }
+        switch (nextFieldAccessStep(ast, current, &lhs, &token)) {
+            .field => {
+                const field_name = ast.tokenSlice(token);
+                if (!first) try buf.insert(gpa, 0, '.');
                 try buf.insertSlice(gpa, 0, field_name);
                 first = false;
-
                 current = lhs;
             },
             .identifier => {
-                const token = tokens[node_idx];
                 const name = ast.tokenSlice(token);
-                if (!first) {
-                    try buf.insert(gpa, 0, '.');
-                }
+                if (!first) try buf.insert(gpa, 0, '.');
                 try buf.insertSlice(gpa, 0, name);
-                break;
+                return try gpa.dupe(u8, buf.items);
             },
-            else => return null,
+            .other => return null,
         }
     }
-
-    return buf.items;
 }
 
 /// Get the base identifier from a field access chain
-pub fn getBaseIdentifier(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) ?[]const u8 {
+pub fn getBaseIdentifier(ast: std.zig.Ast, node: Index) ?[]const u8 {
     var current = node;
+    var lhs: Index = undefined;
+    var token: std.zig.Ast.TokenIndex = undefined;
 
     while (true) {
-        const tags = ast.nodes.items(.tag);
-        const tokens = ast.nodes.items(.main_token);
-        const node_idx = @intFromEnum(current);
-        const tag = tags[node_idx];
-
-        switch (tag) {
-            .field_access => {
-                const data = ast.nodeData(current);
-                current = data.node_and_token[0];
-            },
-            .identifier => {
-                const token = tokens[node_idx];
-                return ast.tokenSlice(token);
-            },
-            else => return null,
+        switch (nextFieldAccessStep(ast, current, &lhs, &token)) {
+            .field => current = lhs,
+            .identifier => return ast.tokenSlice(token),
+            .other => return null,
         }
     }
 }
