@@ -34,44 +34,48 @@ pub const SourceFile = struct {
         self.allocator.free(self.content);
     }
 
-    /// Check if this file should be skipped (tests, examples based on path patterns)
-    /// Uses table-driven pattern matching
-    pub fn shouldSkipFile(self: SourceFile) bool {
-        const path = self.path;
+    pub fn shouldSkipPath(path: []const u8) bool {
         const basename = std.fs.path.basename(path);
 
-        // Table of patterns to skip
         const suffix_patterns = [_][]const u8{
             "_test.zig",
+            ".test.zig",
+            ".spec.zig",
         };
 
         const contains_patterns = [_][]const u8{
             "/test/",
             "/tests/",
+            "/__tests__/",
+            "/spec/",
+            "/specs/",
             "/examples/",
             "/example/",
         };
 
         const equals_patterns = [_][]const u8{
             "test.zig",
+            "tests.zig",
         };
 
-        // Check suffix patterns
         for (suffix_patterns) |pattern| {
             if (std.mem.endsWith(u8, path, pattern)) return true;
         }
 
-        // Check contains patterns
         for (contains_patterns) |pattern| {
             if (std.mem.indexOf(u8, path, pattern) != null) return true;
         }
 
-        // Check equals patterns
         for (equals_patterns) |pattern| {
             if (std.mem.eql(u8, basename, pattern)) return true;
         }
 
         return false;
+    }
+
+    /// Check if this file should be skipped (tests, examples based on path patterns)
+    pub fn shouldSkipFile(self: SourceFile) bool {
+        return shouldSkipPath(self.path);
     }
 
     /// Check if a node is inside a test block
@@ -132,3 +136,11 @@ pub const SourceFile = struct {
         return .{ .line = line, .column = column };
     }
 };
+
+test "shouldSkipPath matches common test paths" {
+    try std.testing.expect(SourceFile.shouldSkipPath("pkg/tests/example.zig"));
+    try std.testing.expect(SourceFile.shouldSkipPath("pkg/__tests__/example.zig"));
+    try std.testing.expect(SourceFile.shouldSkipPath("pkg/foo_test.zig"));
+    try std.testing.expect(SourceFile.shouldSkipPath("pkg/foo.test.zig"));
+    try std.testing.expect(!SourceFile.shouldSkipPath("pkg/src/main.zig"));
+}

@@ -5,6 +5,7 @@ const Summary = @import("../diagnostic.zig").Summary;
 
 const ICON_ERROR = "[X]";
 const ICON_WARNING = "[!]";
+const ICON_HELP = "[?]";
 
 pub const Options = struct {
     use_color: bool = true,
@@ -88,6 +89,9 @@ fn cmpDiagnostic(a: Diagnostic, b: Diagnostic) std.math.Order {
     const rule_order = std.mem.order(u8, a.rule_id, b.rule_id);
     if (rule_order != .eq) return rule_order;
 
+    const severity_order = std.mem.order(u8, a.severity.toString(), b.severity.toString());
+    if (severity_order != .eq) return severity_order;
+
     const msg_order = std.mem.order(u8, a.message, b.message);
     if (msg_order != .eq) return msg_order;
 
@@ -101,14 +105,22 @@ fn cmpDiagnostic(a: Diagnostic, b: Diagnostic) std.math.Order {
 fn sameGroup(a: Diagnostic, b: Diagnostic) bool {
     return std.mem.eql(u8, a.path, b.path) and
         std.mem.eql(u8, a.rule_id, b.rule_id) and
+        a.severity == b.severity and
         std.mem.eql(u8, a.message, b.message);
 }
 
 fn writeDiagnostic(writer: *std.Io.Writer, d: Diagnostic, file_content: ?[]const u8, opts: Options) !void {
-    const is_error = d.severity == .err;
-    const style: zcli.color.Style = if (is_error) .title else .flag;
-    const icon = if (is_error) ICON_ERROR else ICON_WARNING;
-    const sev_text = if (is_error) "error" else "warning";
+    const style: zcli.color.Style = switch (d.severity) {
+        .err => .title,
+        .warning => .flag,
+        .help => .muted,
+    };
+    const icon = switch (d.severity) {
+        .err => ICON_ERROR,
+        .warning => ICON_WARNING,
+        .help => ICON_HELP,
+    };
+    const sev_text = d.severity.toString();
 
     try writer.writeAll("  ");
     try zcli.color.writeStyled(writer, opts.use_color, style, icon);
@@ -182,6 +194,7 @@ fn writeSummary(writer: *std.Io.Writer, s: Summary, use_color: bool) !void {
     try writer.print("  diagnostics: {d}\n", .{s.diagnostics});
     try writer.print("  errors: {d}\n", .{s.errors});
     try writer.print("  warnings: {d}\n", .{s.warnings});
+    try writer.print("  helps: {d}\n", .{s.helps});
     if (s.errors > 0) {
         try zcli.color.writeStyled(writer, use_color, .title, "  status: failed\n");
     } else {

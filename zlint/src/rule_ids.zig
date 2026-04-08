@@ -2,7 +2,7 @@ const std = @import("std");
 
 pub const discarded_result = "discarded_result";
 pub const max_anytype_params = "max_anytype_params";
-pub const no_empty_block = "no_empty_block";
+pub const no_silent_error_handling = "no_silent_error_handling";
 pub const catch_unreachable = "catch_unreachable";
 pub const defer_return_invalid = "defer_return_invalid";
 pub const unused_allocator = "unused_allocator";
@@ -15,7 +15,7 @@ pub const no_anytype_io_params = "no_anytype_io_params";
 pub const all: []const []const u8 = &.{
     discarded_result,
     max_anytype_params,
-    no_empty_block,
+    no_silent_error_handling,
     catch_unreachable,
     defer_return_invalid,
     unused_allocator,

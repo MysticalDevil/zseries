@@ -1,5 +1,6 @@
 const std = @import("std");
 const Config = @import("config.zig").Config;
+const SourceFile = @import("source_file.zig").SourceFile;
 
 pub fn collectFiles(
     allocator: std.mem.Allocator,
@@ -71,6 +72,7 @@ fn collectPath(
     files: *std.ArrayList([]const u8),
 ) !void {
     if (isExcludedPath(path, exclude)) return;
+    if (SourceFile.shouldSkipPath(path)) return;
 
     const cwd = std.Io.Dir.cwd();
     var dir = cwd.openDir(io, path, .{ .iterate = true }) catch |err| {
@@ -93,11 +95,13 @@ fn collectPath(
 
         if (entry.kind == .directory) {
             if (isExcludedPath(entry.name, exclude)) continue;
+            if (SourceFile.shouldSkipPath(entry_path)) continue;
             try collectPath(allocator, io, entry_path, exclude, files);
             continue;
         }
 
         if (entry.kind == .file and std.mem.endsWith(u8, entry.name, ".zig")) {
+            if (SourceFile.shouldSkipPath(entry_path)) continue;
             const normalized = try normalizePathAlloc(allocator, entry_path);
             try files.append(allocator, normalized);
         }

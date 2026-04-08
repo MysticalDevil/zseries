@@ -14,7 +14,7 @@ This document describes the current rule set in `zlint`.
 | --- | --- | --- | --- | --- |
 | `ZAI001` | `discarded_result` | on | `error` | implemented |
 | `ZAI002` | `max_anytype_params` | on | `error` | implemented |
-| `ZAI003` | `no_empty_block` | on | `warning` | implemented |
+| `ZAI003` | `no_silent_error_handling` | on | `warning` | implemented |
 | `-` | `discard_assignment` | off | `warning` | implemented (opt-in) |
 | `ZAI004` | `catch_unreachable` | on | mixed (`error`/`warning`) | implemented |
 | `ZAI005` | `defer_return_invalid` | on | `error` | implemented |
@@ -44,7 +44,7 @@ Common rule fields:
 | Key | Type | Meaning |
 | --- | --- | --- |
 | `enabled` | `bool` | enable/disable the rule |
-| `severity` | `"error" | "warning"` | default severity for the rule |
+| `severity` | `"error" | "warning" | "help"` | default severity for the rule |
 
 All rule sections are under `[rules.<rule_id>]`.
 
@@ -113,12 +113,27 @@ severity = "error"
 max = 2
 ```
 
-### `no_empty_block`
+### `no_silent_error_handling`
 
-Detects empty `catch` blocks and empty `switch else` blocks.
+Detects silent `catch` control-flow exits and empty `switch else` blocks.
+
+Current detection scope:
+
+- `catch {}`
+- `catch return` when `return` has no value
+- `catch continue`
+- `catch break`
+- empty `switch else` blocks
+
+Explicit non-goals for the current implementation:
+
+- does not flag `orelse return/continue/break`
+- does not flag `catch return <value>`
+- does not flag `catch unreachable` or `orelse unreachable`
+  - these belong to `catch_unreachable`
 
 ```toml
-[rules.no_empty_block]
+[rules.no_silent_error_handling]
 enabled = true
 severity = "warning"
 ```
@@ -200,6 +215,8 @@ Detection behavior:
 
 - uses structural + token feature similarity (not only exact signatures)
 - reports measured similarity in output message (for example `92.4% similarity`)
+- high-risk long duplicates stay at `warning`
+- template-like / low-risk matches are downgraded to `help`
 
 Extra options:
 
@@ -207,6 +224,10 @@ Extra options:
 | --- | --- | --- | --- |
 | `min_lines` | `usize` | `8` | minimum duplicate span lines |
 | `min_statements` | `usize` | `4` | minimum duplicate statements |
+| `min_tokens` | `usize` | `40` | minimum token count of a candidate block |
+| `min_similarity_percent` | `usize` | `96` | similarity threshold (1-100) |
+| `min_fuzzy_lines` | `usize` | `20` | minimum block lines required for non-exact similarity matching |
+| `max_reports_per_file` | `usize` | `12` | cap duplicated_code reports per file |
 
 ```toml
 [rules.duplicated_code]
@@ -214,6 +235,10 @@ enabled = true
 severity = "warning"
 min_lines = 8
 min_statements = 4
+min_tokens = 40
+min_similarity_percent = 96
+min_fuzzy_lines = 20
+max_reports_per_file = 12
 ```
 
 ### `no_anytype_io_params`
@@ -250,6 +275,33 @@ severity = "error"
 io_param_aliases = ["writer", "reader", "w", "r"]
 allow_types = ["myio.Writer"]
 ```
+
+---
+
+## Runtime / output behavior
+
+### Verbose levels
+
+- `-v`: pipeline/file/rule trace in `text` mode
+- `-vv`: adds AST traversal trace in `text` mode
+- `-q` cannot be combined with `-v` or `-vv`
+
+### JSON contract
+
+- `-f json` must emit pure JSON only
+- `-f json -v` and `-f json -vv` are accepted but verbose output is ignored
+- failure output is also JSON, with an `err` object instead of side-channel text
+
+### Test skipping
+
+By default, `scan.skip_tests = true`.
+
+This skips common test/example paths and file names, including:
+
+- `tests/`, `test/`, `__tests__/`
+- `examples/`, `example/`
+- `*_test.zig`, `*.test.zig`, `*.spec.zig`
+- `test.zig`, `tests.zig`
 
 ---
 

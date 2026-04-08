@@ -30,7 +30,7 @@ pub const Config = struct {
     pub const RuleConfigs = struct {
         discarded_result: ?DiscardedResultConfig = null,
         max_anytype_params: ?MaxAnytypeParamsConfig = null,
-        no_empty_block: ?NoEmptyBlockConfig = null,
+        no_silent_error_handling: ?NoSilentErrorHandlingConfig = null,
         discard_assignment: ?DiscardAssignmentConfig = null,
         catch_unreachable: ?CatchUnreachableConfig = null,
         defer_return_invalid: ?DeferReturnInvalidConfig = null,
@@ -57,7 +57,7 @@ pub const Config = struct {
         base: BaseRuleConfig = .{},
     };
 
-    pub const NoEmptyBlockConfig = struct {
+    pub const NoSilentErrorHandlingConfig = struct {
         base: BaseRuleConfig = .{ .severity = "warning" },
     };
 
@@ -85,6 +85,10 @@ pub const Config = struct {
         base: BaseRuleConfig = .{ .severity = "warning" },
         min_lines: usize = 8,
         min_statements: usize = 4,
+        min_tokens: usize = 40,
+        min_similarity_percent: usize = 96,
+        min_fuzzy_lines: usize = 20,
+        max_reports_per_file: usize = 12,
     };
 
     pub const NoAnytypeIoParamsConfig = struct {
@@ -174,7 +178,7 @@ fn ensureKnownKeys(table: std.StringHashMap(ztoml.Value), known: []const []const
 const RuleKey = enum {
     discarded_result,
     max_anytype_params,
-    no_empty_block,
+    no_silent_error_handling,
     discard_assignment,
     catch_unreachable,
     defer_return_invalid,
@@ -245,7 +249,7 @@ fn parseRuleEntry(
             }
             rules_cfg.max_anytype_params = rc;
         },
-        .no_empty_block => try parseBaseOnlyRule("no_empty_block", Config.NoEmptyBlockConfig, rules_cfg, rule_node, cfg, "rules.no_empty_block"),
+        .no_silent_error_handling => try parseBaseOnlyRule("no_silent_error_handling", Config.NoSilentErrorHandlingConfig, rules_cfg, rule_node, cfg, "rules.no_silent_error_handling"),
         .discard_assignment => try parseBaseOnlyRule("discard_assignment", Config.DiscardAssignmentConfig, rules_cfg, rule_node, cfg, "rules.discard_assignment"),
         .catch_unreachable => try parseBaseOnlyRule("catch_unreachable", Config.CatchUnreachableConfig, rules_cfg, rule_node, cfg, "rules.catch_unreachable"),
         .defer_return_invalid => try parseBaseOnlyRule("defer_return_invalid", Config.DeferReturnInvalidConfig, rules_cfg, rule_node, cfg, "rules.defer_return_invalid"),
@@ -257,6 +261,13 @@ fn parseRuleEntry(
             try parseBaseRuleConfig(rule_node, &rc.base, cfg, "rules.duplicated_code");
             if (try parsePositiveIntField(rule_node, "min_lines")) |n| rc.min_lines = n;
             if (try parsePositiveIntField(rule_node, "min_statements")) |n| rc.min_statements = n;
+            if (try parsePositiveIntField(rule_node, "min_tokens")) |n| rc.min_tokens = n;
+            if (try parsePositiveIntField(rule_node, "min_similarity_percent")) |n| {
+                if (n > 100) return ConfigError.InvalidConfig;
+                rc.min_similarity_percent = n;
+            }
+            if (try parsePositiveIntField(rule_node, "min_fuzzy_lines")) |n| rc.min_fuzzy_lines = n;
+            if (try parsePositiveIntField(rule_node, "max_reports_per_file")) |n| rc.max_reports_per_file = n;
             rules_cfg.duplicated_code = rc;
         },
         .no_anytype_io_params => {

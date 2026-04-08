@@ -35,7 +35,7 @@ test "basic diagnostic collection" {
 test "ignore directives parsing" {
     const source =
         \\// zlint:file-ignore discarded_result
-        \\const x = 1; // zlint:ignore no_empty_block
+        \\const x = 1; // zlint:ignore no_silent_error_handling
     ;
 
     var ignores = try ignore_directives.IgnoreDirectives.parse(gpa, source);
@@ -43,5 +43,5 @@ test "ignore directives parsing" {
 
     try std.testing.expect(ignores.shouldSuppress("discarded_result", 1));
     try std.testing.expect(ignores.shouldSuppress("discarded_result", 2));
-    try std.testing.expect(ignores.shouldSuppress("no_empty_block", 2));
+    try std.testing.expect(ignores.shouldSuppress("no_silent_error_handling", 2));
 }

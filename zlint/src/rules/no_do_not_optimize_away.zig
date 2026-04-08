@@ -7,6 +7,8 @@ const rule_ids = @import("../rule_ids.zig");
 
 /// Check for doNotOptimizeAway usage
 pub fn run(ctx: *RuleContext) !void {
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
@@ -25,6 +27,7 @@ pub fn run(ctx: *RuleContext) !void {
     // or: const dna = std.mem.doNotOptimizeAway;
     for (tags, 0..) |tag, i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(node)) continue;
         if (tag == .simple_var_decl) {
             try extractAlias(ast, node, &alias_map);
         }
@@ -33,6 +36,7 @@ pub fn run(ctx: *RuleContext) !void {
     // Find all function calls
     for (tags, 0..) |tag, i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(node)) continue;
         if (tag == .call or tag == .call_comma) {
             try checkCall(ctx, node, severity, &alias_map);
         }

@@ -17,12 +17,25 @@ const JsonSummary = struct {
     diagnostics: usize,
     errors: usize,
     warnings: usize,
+    helps: usize,
 };
 
 const JsonReport = struct {
     ok: bool,
     summary: JsonSummary,
     diagnostics: []const JsonDiagnostic,
+};
+
+const JsonError = struct {
+    code: []const u8,
+    message: []const u8,
+    stdout: ?[]const u8 = null,
+    stderr: ?[]const u8 = null,
+};
+
+const JsonFailureReport = struct {
+    ok: bool,
+    err: JsonError,
 };
 
 /// Write diagnostics in JSON format using std.json.Stringify.value
@@ -57,6 +70,7 @@ pub fn writeJson(
             .diagnostics = summary.diagnostics,
             .errors = summary.errors,
             .warnings = summary.warnings,
+            .helps = summary.helps,
         },
         .diagnostics = items,
     };
@@ -67,5 +81,28 @@ pub fn writeJson(
     }, writer);
 
     // Add trailing newline
+    try writer.writeAll("\n");
+}
+
+pub fn writeFailureJson(
+    writer: *std.Io.Writer,
+    code: []const u8,
+    message: []const u8,
+    stdout_text: ?[]const u8,
+    stderr_text: ?[]const u8,
+) !void {
+    const report = JsonFailureReport{
+        .ok = false,
+        .err = .{
+            .code = code,
+            .message = message,
+            .stdout = stdout_text,
+            .stderr = stderr_text,
+        },
+    };
+
+    try std.json.Stringify.value(report, .{
+        .whitespace = .indent_2,
+    }, writer);
     try writer.writeAll("\n");
 }

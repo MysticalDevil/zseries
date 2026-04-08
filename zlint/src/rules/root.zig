@@ -1,4 +1,5 @@
 const std = @import("std");
+const cli = @import("../cli.zig");
 const SourceFile = @import("../source_file.zig").SourceFile;
 const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
 const Severity = @import("../diagnostic.zig").Severity;
@@ -9,7 +10,7 @@ const rule_ids = @import("../rule_ids.zig");
 // Import all rule modules
 const discarded_result = @import("discarded_result.zig");
 const max_anytype_params = @import("max_anytype_params.zig");
-const no_empty_block = @import("no_empty_block.zig");
+const no_silent_error_handling = @import("no_silent_error_handling.zig");
 const catch_unreachable = @import("catch_unreachable.zig");
 const defer_return_invalid = @import("defer_return_invalid.zig");
 const unused_allocator = @import("unused_allocator.zig");
@@ -28,6 +29,10 @@ pub const RuleContext = struct {
     config: Config,
     ignores: *const IgnoreDirectives,
     diagnostics: *DiagnosticCollection,
+    trace_writer: ?*std.Io.Writer = null,
+    trace_use_color: bool = false,
+    verbose_level: u8 = 0,
+    current_rule_name: []const u8 = "",
 
     pub fn addDiagnostic(self: *RuleContext, rule_id: []const u8, severity: Severity, line: usize, column: usize, message: []const u8) !void {
         if (self.ignores.shouldSuppress(rule_id, line)) return;
@@ -49,7 +54,40 @@ pub const RuleContext = struct {
 
     pub fn shouldSkipNode(self: *RuleContext, node: std.zig.Ast.Node.Index) bool {
         if (!self.config.scan.skip_tests) return false;
-        return self.file.isInsideTestBlock(node);
+        const skipped = self.file.isInsideTestBlock(node);
+        if (skipped) self.traceNodeBestEffort(2, node, "skip(test)");
+        return skipped;
+    }
+
+    pub fn trace(self: *RuleContext, level: u8, comptime fmt: []const u8, args: anytype) !void {
+        if (self.trace_writer == null or self.verbose_level < level) return;
+        const writer = self.trace_writer orelse return;
+        try cli.emit(writer, self.trace_use_color, .info, fmt, args);
+    }
+
+    pub fn traceBestEffort(self: *RuleContext, level: u8, comptime fmt: []const u8, args: anytype) void {
+        self.trace(level, fmt, args) catch |err| {
+            std.debug.print("zlint: failed to emit rule trace: {}\n", .{err});
+        };
+    }
+
+    pub fn traceNode(self: *RuleContext, level: u8, node: std.zig.Ast.Node.Index, action: []const u8) !void {
+        if (self.trace_writer == null or self.verbose_level < level) return;
+
+        const ast = self.file.ast;
+        const tag = ast.nodeTag(node);
+        const loc = @import("../ast/locations.zig").getNodeLocation(ast, node, self.file.content);
+        try self.trace(
+            level,
+            "AST {s}: rule='{s}' node={d} tag={s} at {s}:{d}:{d}",
+            .{ action, self.current_rule_name, @intFromEnum(node), @tagName(tag), self.file.path, loc.line, loc.column },
+        );
+    }
+
+    pub fn traceNodeBestEffort(self: *RuleContext, level: u8, node: std.zig.Ast.Node.Index, action: []const u8) void {
+        self.traceNode(level, node, action) catch |err| {
+            std.debug.print("zlint: failed to emit AST trace: {}\n", .{err});
+        };
     }
 };
 
@@ -71,7 +109,7 @@ const RuleEntry = struct {
 const ALL_RULES: []const RuleEntry = &.{
     .{ .id = rule_ids.discarded_result, .name = "discarded_result", .run = discarded_result.run },
     .{ .id = rule_ids.max_anytype_params, .name = "max_anytype_params", .run = max_anytype_params.run },
-    .{ .id = rule_ids.no_empty_block, .name = "no_empty_block", .run = no_empty_block.run },
+    .{ .id = rule_ids.no_silent_error_handling, .name = "no_silent_error_handling", .run = no_silent_error_handling.run },
     .{ .id = rule_ids.discard_assignment, .name = "discard_assignment", .run = discard_assignment.run },
     .{ .id = rule_ids.catch_unreachable, .name = "catch_unreachable", .run = catch_unreachable.run },
     .{ .id = rule_ids.defer_return_invalid, .name = "defer_return_invalid", .run = defer_return_invalid.run },
@@ -86,7 +124,7 @@ const ALL_RULES: []const RuleEntry = &.{
 const DEFAULT_ENABLED_RULES: []const []const u8 = &.{
     "discarded_result",
     "max_anytype_params",
-    "no_empty_block",
+    "no_silent_error_handling",
     "catch_unreachable",
     "defer_return_invalid",
     "unused_allocator",

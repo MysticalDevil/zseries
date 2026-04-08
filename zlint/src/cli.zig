@@ -10,6 +10,7 @@ pub const Options = struct {
     no_compile_check: bool = false,
     no_build: bool = false,
     quiet: bool = false,
+    verbose: u8 = 0,
     color: ColorMode = .auto,
     no_collapse: bool = false,
     max_per_group: usize = 3,
@@ -79,6 +80,14 @@ fn printHelp(io: std.Io, use_color: bool) !void {
     try writer.writeAll("              Suppress output\n");
 
     try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-v, --verbose");
+    try writer.writeAll("            Show verbose debug output in text mode\n");
+
+    try writer.writeAll("  ");
+    try zcli.color.writeStyled(writer, use_color, .flag, "-vv");
+    try writer.writeAll("                     Show AST traversal trace in text mode\n");
+
+    try writer.writeAll("  ");
     try zcli.color.writeStyled(writer, use_color, .flag, "    --color");
     try writer.writeAll(" ");
     try zcli.color.writeStyled(writer, use_color, .value, "<MODE>");
@@ -119,6 +128,9 @@ fn printHelp(io: std.Io, use_color: bool) !void {
     try writer.writeAll("  zlint main.zig           Lint single file\n");
     try writer.writeAll("  zlint --file main.zig    Lint single file (explicit)\n");
     try writer.writeAll("  zlint -f json            Output as JSON\n");
+    try writer.writeAll("  zlint -v                Show verbose text-mode trace output\n");
+    try writer.writeAll("  zlint -vv               Show verbose + AST traversal trace\n");
+    try writer.writeAll("  zlint -f json -vv       Same JSON output; verbose is ignored\n");
 
     try file_writer.flush();
 }
@@ -173,6 +185,16 @@ pub fn parseArgs(io: std.Io, args: []const []const u8, use_color: bool) !Options
             continue;
         }
 
+        if (std.mem.eql(u8, arg, "--verbose")) {
+            options.verbose = @min(@as(u8, 2), options.verbose + 1);
+            continue;
+        }
+
+        if (parseShortVerbose(arg)) |level| {
+            options.verbose = @min(@as(u8, 2), options.verbose + level);
+            continue;
+        }
+
         if (std.mem.eql(u8, arg, "--color")) {
             const value = try takeValue(args, &i, error.InvalidOption);
             options.color = std.meta.stringToEnum(Options.ColorMode, value) orelse return error.InvalidOption;
@@ -203,7 +225,20 @@ pub fn parseArgs(io: std.Io, args: []const []const u8, use_color: bool) !Options
         return error.InvalidOption;
     }
 
+    if (options.quiet and options.verbose > 0) return error.InvalidOption;
+
     return options;
+}
+
+fn parseShortVerbose(arg: []const u8) ?u8 {
+    if (!std.mem.startsWith(u8, arg, "-") or std.mem.startsWith(u8, arg, "--")) return null;
+    if (arg.len < 2) return null;
+
+    for (arg[1..]) |c| {
+        if (c != 'v') return null;
+    }
+
+    return @intCast(arg.len - 1);
 }
 
 fn matchesOption(arg: []const u8, long: []const u8, short: []const u8) bool {
@@ -257,4 +292,31 @@ pub fn emit(writer: *std.Io.Writer, use_color: bool, level: LogLevel, comptime f
     try zcli.color.writeStyled(writer, use_color, style, prefix);
     try writer.print(fmt, args);
     try writer.writeByte('\n');
+}
+
+test "parseArgs enables verbose flag" {
+    const args = [_][]const u8{ "zlint", "-v" };
+    const options = try parseArgs(std.Io.Threaded.global_single_threaded.io(), &args, false);
+    try std.testing.expectEqual(@as(u8, 1), options.verbose);
+    try std.testing.expect(!options.quiet);
+}
+
+test "parseArgs supports ast trace verbose level" {
+    const args = [_][]const u8{ "zlint", "-vv" };
+    const options = try parseArgs(std.Io.Threaded.global_single_threaded.io(), &args, false);
+    try std.testing.expectEqual(@as(u8, 2), options.verbose);
+}
+
+test "parseArgs clamps repeated verbose flags" {
+    const args = [_][]const u8{ "zlint", "--verbose", "--verbose", "--verbose" };
+    const options = try parseArgs(std.Io.Threaded.global_single_threaded.io(), &args, false);
+    try std.testing.expectEqual(@as(u8, 2), options.verbose);
+}
+
+test "parseArgs rejects quiet and verbose together" {
+    const args = [_][]const u8{ "zlint", "-q", "-v" };
+    try std.testing.expectError(
+        error.InvalidOption,
+        parseArgs(std.Io.Threaded.global_single_threaded.io(), &args, false),
+    );
 }

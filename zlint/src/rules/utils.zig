@@ -18,6 +18,7 @@ pub const AstUtils = struct {
             if (t == tag) {
                 const node: std.zig.Ast.Node.Index = @enumFromInt(i);
                 if (!ctx.shouldSkipNode(node)) {
+                    ctx.traceNodeBestEffort(2, node, "visit");
                     try callback(ctx, node);
                 }
             }
@@ -38,6 +39,7 @@ pub const AstUtils = struct {
                 if (t == target_tag) {
                     const node: std.zig.Ast.Node.Index = @enumFromInt(i);
                     if (!ctx.shouldSkipNode(node)) {
+                        ctx.traceNodeBestEffort(2, node, "visit");
                         try callback(ctx, node, t);
                     }
                 }

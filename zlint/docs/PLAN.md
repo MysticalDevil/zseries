@@ -93,20 +93,32 @@ zlint --config zlint.toml
 zlint --root .
 ```
 
-### 5.2 参数规划
+### 5.2 当前 CLI
 
-- MVP：`--format`、`--config`、`--root`、`--quiet`；
-- 预留：`--no-compile-check`、`--rule`、`--deny`、`--warn`、`--files-from`。
+- 已支持：`--format`、`--config`、`--root`、`--quiet`、`--no-compile-check`、`--no-build`；
+- 已支持 verbose 分级：
+  - `-v`：pipeline / file / rule 级 trace；
+  - `-vv`：在 `-v` 基础上追加 AST 遍历级 trace；
+- 约束：
+  - `-q` 与任意 verbose 级别冲突；
+  - `json` 模式接受 `-v/-vv`，但必须忽略，不得污染 JSON 输出；
+- 预留：`--rule`、`--deny`、`--warn`、`--files-from`。
 
 ### 5.3 `zlint.toml` 核心模型
 
 - 顶层：`version`、`scan`、`output`、`rules`；
-- `scan`：`include` / `exclude`；
+- `scan`：`include` / `exclude` / `skip_tests`；
 - `output`：`format`（`text|json`）；
 - 规则通用字段：`enabled`、`severity`；
 - 扩展建议：`fail_on_warning`、`confidence` 默认策略、baseline 路径（后续）。
 
 默认排除目录：`.git`、`zig-cache`、`.zig-cache`、`zig-out`。
+
+默认测试跳过策略：
+
+- `scan.skip_tests = true`；
+- 默认跳过测试/示例路径与文件名模式，例如 `tests/`、`test/`、`__tests__/`、`examples/`、`*_test.zig`、`*.test.zig`、`*.spec.zig`、`test.zig`、`tests.zig`；
+- 规则层也必须尊重 `skip_tests`，避免仅在文件发现阶段跳过而在节点级重新命中。
 
 ---
 
@@ -140,7 +152,7 @@ zlint --root .
 必填字段：
 
 - `rule_id`
-- `severity`（`error|warning`，可预留 `hint`）
+- `severity`（`error|warning|help`）
 - `file`
 - `line` / `column` 或 `span`
 - `message`
@@ -178,7 +190,7 @@ zlint --root .
 | --- | --- | --- | --- |
 | `ZAI001` | `discarded_result` | 检测 `_ = xxx;` 丢弃值 | 已实现 |
 | `ZAI002` | `max_anytype_params` | 限制函数 `anytype` 参数数量 | 已实现 |
-| `ZAI003` | `no_empty_block` | 检测空 catch / 空 switch else | 已实现 |
+| `ZAI003` | `no_silent_error_handling` | 检测静默 catch 控制流退出与空 switch else | 已实现 |
 | `-` | `discard_assignment` | 检测 `_ = value` 形式的无意义赋值语句 | 已实现（默认关闭） |
 | `ZAI004` | `catch_unreachable` | 检测 `catch unreachable` / `orelse unreachable` / `.?` | 已实现 |
 | `ZAI005` | `defer_return_invalid` | 检测 `defer` 后返回失效资源 | 已实现 |
@@ -199,7 +211,7 @@ zlint --root .
 
 ### 8.3 阶段分组建议（按规则 ID）
 
-- **MVP 稳定组**：`discarded_result`、`max_anytype_params`、`no_empty_block`、`no_do_not_optimize_away`
+- **MVP 稳定组**：`discarded_result`、`max_anytype_params`、`no_silent_error_handling`、`no_do_not_optimize_away`
 - **AI P0 组**：`catch_unreachable`、`defer_return_invalid`、`unused_allocator`、`global_allocator_in_lib`
 - **启发式增强组**：`duplicated_code`、`no_anytype_io_params` + 后续规划规则
 
@@ -218,6 +230,7 @@ zlint --root .
 - 宁可少抓，不做高误报默认规则；
 - 高置信规则先保守，再逐步扩张；
 - 每条规则必须定义降级条件与放行条件。
+- 已落地：`duplicated_code` 对低风险模板重复降级为 `help`，不再一律作为 `warning`。
 
 ### 9.2 常见放行上下文
 
@@ -268,9 +281,15 @@ zlint --root .
 
 ### M2：MVP 规则可用（已完成）
 
-- `discarded_result`、`max_anytype_params`、`no_empty_block`、`no_do_not_optimize_away` 可运行；
+- `discarded_result`、`max_anytype_params`、`no_silent_error_handling`、`no_do_not_optimize_away` 可运行；
 - text/json 输出稳定；
 - suppression 生效。
+
+补充现状：
+
+- `json` 模式失败路径也输出纯 JSON；
+- `json` 模式下 verbose 必须静默；
+- `text` 模式已支持 `-v/-vv` 两级调试输出。
 
 ### M3：AI P0 规则落地（已完成）
 
@@ -280,9 +299,9 @@ zlint --root .
 
 ### M3.5：启发式质量增强（进行中）
 
-- `duplicated_code` 在真实项目上误报可控；
+- `duplicated_code` 在真实项目上误报可控，并已支持 `warning/help` 分级；
 - 为规划规则（原 `ZAI009`、`ZAI010`）预留统一上下文降级机制；
-- diagnostics 中 `confidence` 分级开始实用化（未完全落地）。
+- diagnostics 中轻量分级已实用化（当前已落地 `help`，`confidence` 仍未完全落地）。
 
 ### M4：真实项目试用（进行中）
 
@@ -305,11 +324,12 @@ zlint --root .
 
 1. 已完成：固化“仅支持最新版 Zig”。
 2. 已完成：`build_gate` + `ast_frontend` + `diagnostics` 基础链路。
-3. 已完成：`max_anytype_params`、`discarded_result`、`no_empty_block`、`no_do_not_optimize_away` 稳定可用。
+3. 已完成：`max_anytype_params`、`discarded_result`、`no_silent_error_handling`、`no_do_not_optimize_away` 稳定可用。
 4. 已完成：suppression 与基础 corpus/regression 流程建立。
 5. 已完成：`catch_unreachable`、`defer_return_invalid`、`unused_allocator`、`global_allocator_in_lib` 落地。
 6. 进行中：继续稳定 `duplicated_code` / `no_anytype_io_params`，再推进规划规则。
-7. 持续策略：在误报稳定前，不扩展泛化 style 规则。
+7. 进行中：把 `help` 级重复命中持续压缩到“值得人工判断”的最小集合。
+8. 持续策略：在误报稳定前，不扩展泛化 style 规则。
 
 ---
 

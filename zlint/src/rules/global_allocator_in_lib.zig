@@ -6,7 +6,7 @@ const names = @import("../ast/names.zig");
 const rule_ids = @import("../rule_ids.zig");
 
 pub fn run(ctx: *RuleContext) !void {
-    if (isTestOrMainFile(ctx.file.path)) return;
+    if (ctx.shouldSkipFile() or isTestOrMainFile(ctx.file.path)) return;
 
     var severity = Severity.err;
     if (ctx.config.rules.global_allocator_in_lib) |cfg| {
@@ -18,6 +18,7 @@ pub fn run(ctx: *RuleContext) !void {
     for (tags, 0..) |tag, i| {
         if (tag != .fn_decl) continue;
         const fn_node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(fn_node)) continue;
         if (isEntryPointFunction(ast, fn_node)) continue;
         try checkFunction(ctx, fn_node, severity);
     }

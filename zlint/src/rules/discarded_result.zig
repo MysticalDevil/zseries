@@ -7,6 +7,8 @@ const rule_ids = @import("../rule_ids.zig");
 
 /// Check for discarded values: `_ = xxx;`
 pub fn run(ctx: *RuleContext) !void {
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
@@ -26,6 +28,7 @@ pub fn run(ctx: *RuleContext) !void {
     // Find all assignment expressions
     for (tags, 0..) |tag, i| {
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(node)) continue;
 
         if (tag == .assign) {
             try checkAssignment(ctx, node, severity, strict, allow_names);

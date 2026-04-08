@@ -29,6 +29,7 @@ pub fn run(ctx: *RuleContext) !void {
 
         if (tag == .fn_decl) {
             if (ctx.shouldSkipNode(node)) continue;
+            ctx.traceNodeBestEffort(2, node, "inspect");
             try checkFnDecl(ctx, node, severity, aliases, allow_types);
             continue;
         }
@@ -39,6 +40,7 @@ pub fn run(ctx: *RuleContext) !void {
 
         if (is_container_field) {
             if (ctx.shouldSkipNode(node)) continue;
+            ctx.traceNodeBestEffort(2, node, "inspect");
             try checkContainerField(ctx, node, severity, aliases, allow_types);
         }
     }
@@ -71,6 +73,7 @@ fn checkFnDecl(
         }
 
         const loc = locations.getTokenLocation(ast, name_tok, ctx.file.content);
+        ctx.traceNodeBestEffort(2, fn_node, "match");
         var msg_buf: [240]u8 = undefined;
         const msg = try std.fmt.bufPrint(
             &msg_buf,
@@ -99,6 +102,7 @@ fn checkContainerField(
     if (isAllowedIoType(ast, type_expr, allow_types, ctx.allocator)) return;
 
     const loc = locations.getTokenLocation(ast, full_field.ast.main_token, ctx.file.content);
+    ctx.traceNodeBestEffort(2, field_node, "match");
     var msg_buf: [240]u8 = undefined;
     const msg = try std.fmt.bufPrint(
         &msg_buf,

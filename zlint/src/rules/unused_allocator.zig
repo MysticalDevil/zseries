@@ -5,6 +5,8 @@ const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
 
 pub fn run(ctx: *RuleContext) !void {
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
@@ -16,6 +18,7 @@ pub fn run(ctx: *RuleContext) !void {
     for (tags, 0..) |tag, i| {
         if (tag != .fn_decl) continue;
         const fn_node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(fn_node)) continue;
         try checkFunction(ctx, fn_node, severity);
     }
 }

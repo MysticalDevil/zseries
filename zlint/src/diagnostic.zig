@@ -4,10 +4,12 @@ const std = @import("std");
 pub const Severity = enum {
     err,
     warning,
+    help,
 
     pub fn fromString(s: []const u8) ?Severity {
         if (std.mem.eql(u8, s, "error")) return .err;
         if (std.mem.eql(u8, s, "warning")) return .warning;
+        if (std.mem.eql(u8, s, "help")) return .help;
         return null;
     }
 
@@ -15,6 +17,7 @@ pub const Severity = enum {
         return switch (self) {
             .err => "error",
             .warning => "warning",
+            .help => "help",
         };
     }
 };
@@ -35,12 +38,14 @@ pub const Summary = struct {
     diagnostics: usize = 0,
     errors: usize = 0,
     warnings: usize = 0,
+    helps: usize = 0,
 
     pub fn addDiagnostic(self: *Summary, severity: Severity) void {
         self.diagnostics += 1;
         switch (severity) {
             .err => self.errors += 1,
             .warning => self.warnings += 1,
+            .help => self.helps += 1,
         }
     }
 };
@@ -84,3 +89,20 @@ pub const DiagnosticCollection = struct {
         return summary;
     }
 };
+
+test "severity supports help string conversion" {
+    try std.testing.expectEqual(Severity.help, Severity.fromString("help").?);
+    try std.testing.expectEqualStrings("help", Severity.help.toString());
+}
+
+test "summary counts help separately" {
+    var summary = Summary{};
+    summary.addDiagnostic(.err);
+    summary.addDiagnostic(.warning);
+    summary.addDiagnostic(.help);
+
+    try std.testing.expectEqual(@as(usize, 3), summary.diagnostics);
+    try std.testing.expectEqual(@as(usize, 1), summary.errors);
+    try std.testing.expectEqual(@as(usize, 1), summary.warnings);
+    try std.testing.expectEqual(@as(usize, 1), summary.helps);
+}

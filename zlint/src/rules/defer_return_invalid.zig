@@ -6,6 +6,8 @@ const rule_ids = @import("../rule_ids.zig");
 
 /// ZAI005: Detect returning resources after defer deinit
 pub fn run(ctx: *RuleContext) !void {
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
     var severity = Severity.err;
@@ -17,6 +19,7 @@ pub fn run(ctx: *RuleContext) !void {
         if (tag != .@"return") continue;
 
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(node)) continue;
         const return_data = ast.nodeData(node);
 
         // Skip if no return expression

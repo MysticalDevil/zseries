@@ -17,8 +17,10 @@ pub fn run(ctx: *RuleContext) !void {
         if (ctx.shouldSkipNode(node)) continue;
 
         if (tag == .@"catch" or tag == .@"orelse") {
+            ctx.traceNodeBestEffort(2, node, "inspect");
             const rhs = AstUtils.getRhs(ast, node);
             if (AstUtils.isNodeTag(ast, rhs, .unreachable_literal)) {
+                ctx.traceNodeBestEffort(2, node, "match");
                 const msg = if (tag == .@"catch")
                     "catch unreachable suppresses error handling - use proper error handling instead"
                 else
@@ -26,6 +28,7 @@ pub fn run(ctx: *RuleContext) !void {
                 try AstUtils.addDiagnosticAtNode(ctx, rule_ids.catch_unreachable, Severity.err, node, msg);
             }
         } else if (tag == .unwrap_optional) {
+            ctx.traceNodeBestEffort(2, node, "match");
             try AstUtils.addDiagnosticAtNode(
                 ctx,
                 rule_ids.catch_unreachable,

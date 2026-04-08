@@ -5,6 +5,8 @@ const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
 
 pub fn run(ctx: *RuleContext) !void {
+    if (ctx.shouldSkipFile()) return;
+
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
@@ -17,6 +19,7 @@ pub fn run(ctx: *RuleContext) !void {
         if (tag != .assign) continue;
 
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (ctx.shouldSkipNode(node)) continue;
         const lhs = ast.nodeData(node).node_and_node[0];
         if (!isUnderscore(ast, lhs)) continue;
 
