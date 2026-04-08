@@ -2,6 +2,7 @@ const std = @import("std");
 const RuleContext = @import("root.zig").RuleContext;
 const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
+const rule_ids = @import("../rule_ids.zig");
 
 /// Check for too many anytype parameters in functions
 pub fn run(ctx: *RuleContext) !void {
@@ -17,14 +18,10 @@ pub fn run(ctx: *RuleContext) !void {
         max_anytype = config.max;
     }
 
-    // Find all function declarations
     for (tags, 0..) |tag, i| {
+        if (tag != .fn_decl) continue;
         const node: std.zig.Ast.Node.Index = @enumFromInt(i);
-
-        switch (tag) {
-            .fn_decl => try checkFnDecl(ctx, node, severity, max_anytype),
-            else => {},
-        }
+        try checkFnDecl(ctx, node, severity, max_anytype);
     }
 }
 
@@ -50,7 +47,7 @@ fn checkFnDecl(
     }
 
     // Count anytype parameters
-    const anytype_count = try countAnytypeParams(ast, proto_node);
+    const anytype_count = countAnytypeParams(ast, proto_node, ctx.file.content);
 
     if (anytype_count > max_anytype) {
         const loc = locations.getNodeLocation(ast, node, ctx.file.content);
@@ -62,7 +59,7 @@ fn checkFnDecl(
         });
 
         try ctx.addDiagnostic(
-            "max-anytype-params",
+            rule_ids.max_anytype_params,
             severity,
             loc.line,
             loc.column,
@@ -71,14 +68,28 @@ fn checkFnDecl(
     }
 }
 
-fn countAnytypeParams(ast: std.zig.Ast, proto_node: std.zig.Ast.Node.Index) !usize {
-    _ = proto_node;
+fn countAnytypeParams(ast: std.zig.Ast, proto_node: std.zig.Ast.Node.Index, source: []const u8) usize {
+    const first = ast.firstToken(proto_node);
+    const last = ast.lastToken(proto_node);
+    const start = ast.tokenStart(first);
+    const end = ast.tokenStart(last) + @as(u32, @intCast(ast.tokenSlice(last).len));
+    if (end <= start or end > source.len) return 0;
 
-    const count: usize = 0;
+    const sig = source[start..end];
+    var i: usize = 0;
+    var count: usize = 0;
+    while (i < sig.len) : (i += 1) {
+        if (i + "anytype".len > sig.len) break;
+        if (!std.mem.eql(u8, sig[i .. i + "anytype".len], "anytype")) continue;
 
-    // TODO: Implement proper anytype parameter counting for Zig 0.16
-    // This requires walking the function prototype's parameter list
-    _ = ast;
-
+        const left_ok = i == 0 or !isIdentChar(sig[i - 1]);
+        const right_idx = i + "anytype".len;
+        const right_ok = right_idx >= sig.len or !isIdentChar(sig[right_idx]);
+        if (left_ok and right_ok) count += 1;
+    }
     return count;
+}
+
+fn isIdentChar(c: u8) bool {
+    return std.ascii.isAlphanumeric(c) or c == '_';
 }

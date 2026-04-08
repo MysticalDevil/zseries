@@ -3,6 +3,7 @@ const RuleContext = @import("root.zig").RuleContext;
 const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
 const names = @import("../ast/names.zig");
+const rule_ids = @import("../rule_ids.zig");
 
 /// Check for doNotOptimizeAway usage
 pub fn run(ctx: *RuleContext) !void {
@@ -118,7 +119,7 @@ fn checkCall(
         const loc = locations.getNodeLocation(ast, node, ctx.file.content);
 
         try ctx.addDiagnostic(
-            "no-do-not-optimize-away",
+            rule_ids.no_do_not_optimize_away,
             severity,
             loc.line,
             loc.column,

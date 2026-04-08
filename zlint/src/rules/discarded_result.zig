@@ -3,6 +3,7 @@ const RuleContext = @import("root.zig").RuleContext;
 const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
 const names = @import("../ast/names.zig");
+const rule_ids = @import("../rule_ids.zig");
 
 /// Check for discarded values: `_ = xxx;`
 pub fn run(ctx: *RuleContext) !void {
@@ -53,23 +54,25 @@ fn checkAssignment(
     // These are intentional patterns to silence unused parameter warnings
     if (isIdentifier(ast, rhs)) return;
 
-    // In strict mode, always report
-    if (!strict) {
-        // TODO: Non-strict mode logic
-    }
+    if (!strict and !isCallLike(ast, rhs)) return;
 
     // Check allowlist
-    if (try checkAllowlist(ast, rhs, allow_names, ctx.allocator)) return;
+    if (try checkAllowlist(ast, rhs, allow_names)) return;
 
     const loc = locations.getNodeLocation(ast, node, ctx.file.content);
 
     try ctx.addDiagnostic(
-        "discarded-result",
+        rule_ids.discarded_result,
         severity,
         loc.line,
         loc.column,
         "discarded value via '_ = ...;'",
     );
+}
+
+fn isCallLike(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
+    const tag = ast.nodeTag(node);
+    return tag == .call or tag == .call_comma;
 }
 
 fn isUnderscore(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
@@ -88,10 +91,9 @@ fn isIdentifier(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
     return tags[@intFromEnum(node)] == .identifier;
 }
 
-fn checkAllowlist(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, allow_names: []const []const u8, allocator: std.mem.Allocator) !bool {
+fn checkAllowlist(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, allow_names: []const []const u8) !bool {
     // Get the function name being called
     const fn_name = names.getBaseIdentifier(ast, node) orelse return false;
-    _ = allocator;
 
     for (allow_names) |allowed| {
         if (std.mem.eql(u8, fn_name, allowed)) return true;

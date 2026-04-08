@@ -2,77 +2,127 @@ const std = @import("std");
 const RuleContext = @import("root.zig").RuleContext;
 const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
+const rule_ids = @import("../rule_ids.zig");
 
-const ParamInfo = struct {
-    name: []const u8,
-    node: std.zig.Ast.Node.Index,
-};
-
-/// ZAI006: Detect allocator parameter passed but not used
-/// This catches the pattern: fn foo(allocator: Allocator) void { _ = allocator; }
 pub fn run(ctx: *RuleContext) !void {
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
-    // Find all function declarations
-    for (tags, 0..) |tag, i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+    var severity = Severity.err;
+    if (ctx.config.rules.unused_allocator) |cfg| {
+        severity = Severity.fromString(cfg.base.severity) orelse Severity.err;
+    }
 
-        switch (tag) {
-            .fn_decl => {
-                try checkFunction(ctx, node);
-            },
-            else => {},
-        }
+    for (tags, 0..) |tag, i| {
+        if (tag != .fn_decl) continue;
+        const fn_node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        try checkFunction(ctx, fn_node, severity);
     }
 }
 
-fn checkFunction(ctx: *RuleContext, fn_node: std.zig.Ast.Node.Index) !void {
+fn checkFunction(ctx: *RuleContext, fn_node: std.zig.Ast.Node.Index, severity: Severity) !void {
     const ast = ctx.file.ast;
-
-    // Get function prototype to find parameters
     const fn_data = ast.nodeData(fn_node);
     const proto_node = fn_data.node_and_node[0];
+    const body_node = fn_data.node_and_node[1];
+    if (@intFromEnum(body_node) == 0) return;
 
-    // Get parameter list from prototype - use fullFnProto
-    var buf: [1]std.zig.Ast.Node.Index = undefined;
-    if (ast.fullFnProto(&buf, proto_node)) |proto| {
-        const params = proto.ast.params;
+    var proto_buf: [1]std.zig.Ast.Node.Index = undefined;
+    const proto = ast.fullFnProto(&proto_buf, proto_node) orelse return;
 
-        // Check for allocator parameters
-        var params_to_check = std.ArrayList(ParamInfo).empty;
-        defer params_to_check.deinit(ctx.allocator);
+    var alloc_params = std.ArrayList([]const u8).empty;
+    defer alloc_params.deinit(ctx.allocator);
 
-        for (params) |param| {
-            try checkParamForAllocator(ast, param, ctx.allocator, &params_to_check);
-        }
+    for (proto.ast.params) |param_node| {
+        if (@intFromEnum(param_node) == 0) continue;
+        const tok = ast.nodes.items(.main_token)[@intFromEnum(param_node)];
+        const name = ast.tokenSlice(tok);
+        if (isAllocatorName(name)) try alloc_params.append(ctx.allocator, name);
+    }
 
-        // Check if any allocator parameter is used
-        for (params_to_check.items) |param| {
-            if (!isParamUsed(ast, fn_node, param.name)) {
-                const loc = locations.getNodeLocation(ast, fn_node, ctx.file.content);
-                try ctx.addDiagnostic(
-                    "unused-allocator",
-                    Severity.err,
-                    loc.line,
-                    loc.column,
-                    "allocator parameter is passed but never used",
-                );
-            }
-        }
+    if (alloc_params.items.len == 0) return;
+
+    var discard_tokens = std.AutoHashMap(std.zig.Ast.TokenIndex, void).init(ctx.allocator);
+    defer discard_tokens.deinit();
+    try collectDiscardTokens(ctx, body_node, &discard_tokens, alloc_params.items);
+
+    for (alloc_params.items) |param_name| {
+        if (isParamUsed(ctx, body_node, param_name, &discard_tokens)) continue;
+
+        const loc = locations.getNodeLocation(ast, fn_node, ctx.file.content);
+        try ctx.addDiagnostic(
+            rule_ids.unused_allocator,
+            severity,
+            loc.line,
+            loc.column,
+            "allocator parameter is passed but never used",
+        );
     }
 }
 
-fn checkParamForAllocator(ast: std.zig.Ast, param_node: std.zig.Ast.Node.Index, gpa: std.mem.Allocator, list: *std.ArrayList(ParamInfo)) !void {
-    // Get parameter name from first token
-    const tokens = ast.nodes.items(.main_token);
-    const tok = tokens[@intFromEnum(param_node)];
-    const name = ast.tokenSlice(tok);
+fn collectDiscardTokens(
+    ctx: *RuleContext,
+    body_node: std.zig.Ast.Node.Index,
+    discard_tokens: *std.AutoHashMap(std.zig.Ast.TokenIndex, void),
+    allocator_names: []const []const u8,
+) !void {
+    const ast = ctx.file.ast;
+    const tags = ast.nodes.items(.tag);
 
-    // Check if name suggests allocator
-    if (isAllocatorName(name)) {
-        try list.append(gpa, .{ .name = name, .node = param_node });
+    for (tags, 0..) |tag, i| {
+        if (tag != .assign) continue;
+        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (!isInsideNode(ast, body_node, node)) continue;
+
+        const data = ast.nodeData(node);
+        const lhs = data.node_and_node[0];
+        const rhs = data.node_and_node[1];
+        if (!isUnderscoreIdentifier(ast, lhs)) continue;
+        if (ast.nodeTag(rhs) != .identifier) continue;
+
+        const rhs_token = ast.nodes.items(.main_token)[@intFromEnum(rhs)];
+        const rhs_name = ast.tokenSlice(rhs_token);
+        if (!inList(rhs_name, allocator_names)) continue;
+
+        try discard_tokens.put(rhs_token, {});
     }
+}
+
+fn isParamUsed(
+    ctx: *RuleContext,
+    body_node: std.zig.Ast.Node.Index,
+    param_name: []const u8,
+    discard_tokens: *const std.AutoHashMap(std.zig.Ast.TokenIndex, void),
+) bool {
+    const ast = ctx.file.ast;
+    const tags = ast.nodes.items(.tag);
+
+    for (tags, 0..) |tag, i| {
+        if (tag != .identifier) continue;
+        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (!isInsideNode(ast, body_node, node)) continue;
+
+        const token = ast.nodes.items(.main_token)[@intFromEnum(node)];
+        if (discard_tokens.contains(token)) continue;
+        if (!std.mem.eql(u8, ast.tokenSlice(token), param_name)) continue;
+        return true;
+    }
+
+    return false;
+}
+
+fn isInsideNode(ast: std.zig.Ast, parent: std.zig.Ast.Node.Index, node: std.zig.Ast.Node.Index) bool {
+    const p_first = ast.firstToken(parent);
+    const p_last = ast.lastToken(parent);
+    const n_first = ast.firstToken(node);
+    const n_last = ast.lastToken(node);
+    return n_first >= p_first and n_last <= p_last;
+}
+
+fn isUnderscoreIdentifier(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
+    if (ast.nodeTag(node) != .identifier) return false;
+    const token = ast.nodes.items(.main_token)[@intFromEnum(node)];
+    return std.mem.eql(u8, ast.tokenSlice(token), "_");
 }
 
 fn isAllocatorName(name: []const u8) bool {
@@ -84,31 +134,9 @@ fn isAllocatorName(name: []const u8) bool {
         std.mem.endsWith(u8, name, "_alloc");
 }
 
-fn isParamUsed(ast: std.zig.Ast, fn_node: std.zig.Ast.Node.Index, param_name: []const u8) bool {
-    // Get function body
-    const body = ast.nodeData(fn_node).node_and_node[1];
-
-    // Simple check: look for identifier with this name in function body
-    return checkIdentifierUsage(ast, body, param_name);
-}
-
-fn checkIdentifierUsage(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, name: []const u8) bool {
-    const tags = ast.nodes.items(.tag);
-    const tag = tags[@intFromEnum(node)];
-
-    // Check if this node is an identifier with matching name
-    if (tag == .identifier) {
-        const tokens = ast.nodes.items(.main_token);
-        const tok = tokens[@intFromEnum(node)];
-        const node_name = ast.tokenSlice(tok);
-
-        if (std.mem.eql(u8, node_name, name)) {
-            return true;
-        }
+fn inList(name: []const u8, list: []const []const u8) bool {
+    for (list) |item| {
+        if (std.mem.eql(u8, name, item)) return true;
     }
-
-    // TODO: Recurse into child nodes
-    // For now, we do a simple check that catches obvious cases
-
     return false;
 }

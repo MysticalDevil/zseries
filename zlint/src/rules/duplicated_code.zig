@@ -2,519 +2,189 @@ const std = @import("std");
 const RuleContext = @import("root.zig").RuleContext;
 const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
+const rule_ids = @import("../rule_ids.zig");
 
-// P1: Code Block Extraction
-pub const CodeBlock = struct {
-    node: std.zig.Ast.Node.Index,
-    start_line: usize,
-    end_line: usize,
+const feature_bins = 64;
+const min_similarity_default = 0.85;
+
+const BlockShape = struct {
+    line: usize,
+    stmt_count: usize,
+    token_count: usize,
+    exact_sig: u64,
+    features: [feature_bins]u32,
 };
 
-pub const BlockList = struct {
-    allocator: std.mem.Allocator,
-    items: []CodeBlock,
-
-    pub fn deinit(self: *BlockList) void {
-        self.allocator.free(self.items);
-    }
+const BlockMatch = struct {
+    line: usize,
+    similarity: f64,
 };
 
-pub fn extractBlocks(allocator: std.mem.Allocator, source: [:0]const u8) !BlockList {
-    var ast = try std.zig.Ast.parse(allocator, source, .zig);
-    defer ast.deinit(allocator);
-
-    var blocks = std.ArrayList(CodeBlock).empty;
-    defer blocks.deinit(allocator);
-
-    const tags = ast.nodes.items(.tag);
-
-    for (tags, 0..) |tag, i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
-
-        switch (tag) {
-            .fn_decl => {
-                const body = ast.nodeData(node).node_and_node[1];
-                if (@intFromEnum(body) != 0) {
-                    const start_loc = locations.getNodeLocation(ast, body, source);
-                    const end_loc = locations.getTokenLocation(ast, ast.lastToken(body), source);
-                    try blocks.append(allocator, .{
-                        .node = body,
-                        .start_line = start_loc.line,
-                        .end_line = end_loc.line,
-                    });
-                }
-            },
-            else => {},
-        }
-    }
-
-    return BlockList{
-        .allocator = allocator,
-        .items = try blocks.toOwnedSlice(allocator),
-    };
-}
-
-// P2: AST Normalization
-pub fn normalizeCode(allocator: std.mem.Allocator, source: []const u8) ![]const u8 {
-    var result = std.ArrayList(u8).empty;
-    defer result.deinit(allocator);
-
-    var i: usize = 0;
-    var var_counter: usize = 0;
-
-    var var_map = std.StringHashMap(usize).init(allocator);
-    defer var_map.deinit();
-
-    while (i < source.len) {
-        if (std.ascii.isWhitespace(source[i])) {
-            try result.append(allocator, source[i]);
-            i += 1;
-            continue;
-        }
-
-        if (isIdentStart(source[i])) {
-            const start = i;
-            while (i < source.len and isIdentChar(source[i])) {
-                i += 1;
-            }
-            const ident = source[start..i];
-
-            const entry = try var_map.getOrPut(ident);
-            if (!entry.found_existing) {
-                entry.value_ptr.* = var_counter;
-                var_counter += 1;
-            }
-
-            try result.append(allocator, '$');
-            try result.append(allocator, 'V');
-            try result.append(allocator, 'A');
-            try result.append(allocator, 'R');
-
-            var buf: [32]u8 = undefined;
-            const num_str = try std.fmt.bufPrint(&buf, "{d}", .{entry.value_ptr.*});
-            for (num_str) |c| {
-                try result.append(allocator, c);
-            }
-        } else {
-            try result.append(allocator, source[i]);
-            i += 1;
-        }
-    }
-
-    return result.toOwnedSlice(allocator);
-}
-
-fn isIdentStart(c: u8) bool {
-    return (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z') or c == '_';
-}
-
-fn isIdentChar(c: u8) bool {
-    return isIdentStart(c) or (c >= '0' and c <= '9');
-}
-
-// P3: Duplicate Detection
-pub const Duplicate = struct {
-    start_line_1: usize,
-    start_line_2: usize,
-    length: usize,
-    similarity: f32,
-};
-
-pub const DuplicateList = struct {
-    allocator: std.mem.Allocator,
-    items: []Duplicate,
-
-    pub fn deinit(self: *DuplicateList) void {
-        self.allocator.free(self.items);
-    }
-};
-
-pub const DetectionOptions = struct {
-    min_lines: usize = 5,
-    min_statements: usize = 3,
-    exclude_error_handling: bool = true,
-};
-
-pub fn findDuplicates(
-    allocator: std.mem.Allocator,
-    source: [:0]const u8,
-    options: DetectionOptions,
-) !DuplicateList {
-    var dups = std.ArrayList(Duplicate).empty;
-    defer dups.deinit(allocator);
-
-    const normalized = try normalizeCode(allocator, source);
-    defer allocator.free(normalized);
-
-    var lines = std.ArrayList([]const u8).empty;
-    defer lines.deinit(allocator);
-
-    var it = std.mem.splitScalar(u8, normalized, '\n');
-    while (it.next()) |line| {
-        try lines.append(allocator, line);
-    }
-
-    const min_lines = options.min_lines;
-
-    var i: usize = 0;
-    while (i + min_lines <= lines.items.len) : (i += 1) {
-        const window1 = lines.items[i .. i + min_lines];
-
-        var j: usize = i + min_lines;
-        while (j + min_lines <= lines.items.len) : (j += 1) {
-            const window2 = lines.items[j .. j + min_lines];
-
-            if (areWindowsEqual(window1, window2)) {
-                try dups.append(allocator, .{
-                    .start_line_1 = i + 1,
-                    .start_line_2 = j + 1,
-                    .length = min_lines,
-                    .similarity = 1.0,
-                });
-            }
-        }
-    }
-
-    return DuplicateList{
-        .allocator = allocator,
-        .items = try dups.toOwnedSlice(allocator),
-    };
-}
-
-fn areWindowsEqual(window1: [][]const u8, window2: [][]const u8) bool {
-    if (window1.len != window2.len) return false;
-
-    for (window1, window2) |line1, line2| {
-        if (!std.mem.eql(u8, line1, line2)) return false;
-    }
-
-    return true;
-}
-
-// P4: Branch Duplication Detection
-pub fn findBranchDuplicates(
-    allocator: std.mem.Allocator,
-    source: [:0]const u8,
-) !DuplicateList {
-    var dups = std.ArrayList(Duplicate).empty;
-    defer dups.deinit(allocator);
-
-    var ast = try std.zig.Ast.parse(allocator, source, .zig);
-    defer ast.deinit(allocator);
-
-    const tags = ast.nodes.items(.tag);
-
-    for (tags, 0..) |tag, i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
-
-        // Check if/else branches using fullIf
-        if (tag == .@"if") {
-            if (ast.fullIf(node)) |if_info| {
-                const then_body = if_info.ast.then_expr;
-                const else_body = if_info.ast.else_expr;
-
-                if (@intFromEnum(then_body) != 0 and else_body != .none) {
-                    if (else_body.unwrap()) |else_body_unwrapped| {
-                        try compareBranches(allocator, &ast, source, then_body, else_body_unwrapped, &dups);
-                    }
-                }
-            }
-        }
-    }
-
-    return DuplicateList{
-        .allocator = allocator,
-        .items = try dups.toOwnedSlice(allocator),
-    };
-}
-
-fn compareBranches(
-    allocator: std.mem.Allocator,
-    ast: *const std.zig.Ast,
-    source: [:0]const u8,
-    then_body: std.zig.Ast.Node.Index,
-    else_body: std.zig.Ast.Node.Index,
-    dups: *std.ArrayList(Duplicate),
-) !void {
-    // Extract source text for both branches
-    const then_start = locations.getNodeLocation(ast.*, then_body, source);
-    const then_end = locations.getTokenLocation(ast.*, ast.lastToken(then_body), source);
-    const else_start = locations.getNodeLocation(ast.*, else_body, source);
-    const else_end = locations.getTokenLocation(ast.*, ast.lastToken(else_body), source);
-
-    const then_text = try extractLines(allocator, source, then_start.line, then_end.line);
-    defer allocator.free(then_text);
-
-    const else_text = try extractLines(allocator, source, else_start.line, else_end.line);
-    defer allocator.free(else_text);
-
-    // Normalize and compare
-    const norm_then = try normalizeCode(allocator, then_text);
-    defer allocator.free(norm_then);
-
-    const norm_else = try normalizeCode(allocator, else_text);
-    defer allocator.free(norm_else);
-
-    // Check if they are identical or very similar
-    if (std.mem.eql(u8, norm_then, norm_else)) {
-        try dups.append(allocator, .{
-            .start_line_1 = then_start.line,
-            .start_line_2 = else_start.line,
-            .length = @max(1, then_end.line - then_start.line + 1),
-            .similarity = 1.0,
-        });
-    }
-}
-
-fn extractLines(allocator: std.mem.Allocator, source: [:0]const u8, start_line: usize, end_line: usize) ![]const u8 {
-    var result = std.ArrayList(u8).empty;
-    defer result.deinit(allocator);
-
-    var current_line: usize = 1;
-    var i: usize = 0;
-
-    while (i < source.len and current_line <= end_line) {
-        if (current_line >= start_line) {
-            try result.append(allocator, source[i]);
-        }
-
-        if (source[i] == '\n') {
-            current_line += 1;
-        }
-
-        i += 1;
-    }
-
-    return result.toOwnedSlice(allocator);
-}
-
-// P5: Main Rule Entry Point
 pub fn run(ctx: *RuleContext) !void {
-    const source = ctx.file.content;
-    const allocator = ctx.allocator;
-
-    // Skip if file should be skipped
     if (ctx.shouldSkipFile()) return;
 
-    // Track allocated messages to free later
-    var messages = std.ArrayList([]const u8).empty;
-    defer {
-        for (messages.items) |msg| {
-            allocator.free(msg);
+    var severity = Severity.warning;
+    var min_lines: usize = 5;
+    var min_statements: usize = 3;
+    if (ctx.config.rules.duplicated_code) |cfg| {
+        severity = Severity.fromString(cfg.base.severity) orelse Severity.warning;
+        min_lines = cfg.min_lines;
+        min_statements = cfg.min_statements;
+    }
+
+    const min_similarity = min_similarity_default;
+    var seen = std.ArrayList(BlockShape).empty;
+    defer seen.deinit(ctx.allocator);
+
+    const ast = ctx.file.ast;
+    const tags = ast.nodes.items(.tag);
+    var stmt_buf: [2]std.zig.Ast.Node.Index = undefined;
+
+    for (tags, 0..) |tag, i| {
+        if (!isBlockTag(tag)) continue;
+        const block: std.zig.Ast.Node.Index = @enumFromInt(i);
+        const statements = ast.blockStatements(&stmt_buf, block) orelse continue;
+        if (statements.len < min_statements) continue;
+
+        const line_span = lineSpan(ast, ctx.file.content, block);
+        if (line_span < min_lines) continue;
+
+        const shape = buildBlockShape(ast, ctx.file.content, block, statements);
+        if (findBestMatch(seen.items, shape, min_similarity)) |match| {
+            const loc = locations.getNodeLocation(ast, block, ctx.file.content);
+            var msg_buf: [220]u8 = undefined;
+            const msg = try std.fmt.bufPrint(
+                &msg_buf,
+                "possible duplicate block structure ({d:.1}% similarity) with earlier block at line {d}",
+                .{ match.similarity * 100.0, match.line },
+            );
+            try ctx.addDiagnostic(rule_ids.duplicated_code, severity, loc.line, loc.column, msg);
         }
-        messages.deinit(allocator);
+
+        try seen.append(ctx.allocator, shape);
+    }
+}
+
+fn buildBlockShape(
+    ast: std.zig.Ast,
+    source: []const u8,
+    block: std.zig.Ast.Node.Index,
+    statements: []const std.zig.Ast.Node.Index,
+) BlockShape {
+    const loc = locations.getNodeLocation(ast, block, source);
+    var features: [feature_bins]u32 = [_]u32{0} ** feature_bins;
+    var token_count: usize = 0;
+
+    for (statements) |stmt| {
+        const stmt_tag: u16 = @intFromEnum(ast.nodeTag(stmt));
+        const stmt_bucket = featureBucket(stmt_tag);
+        features[stmt_bucket] +|= 3;
+
+        const first = ast.firstToken(stmt);
+        const last = ast.lastToken(stmt);
+        var tok = first;
+        while (tok <= last) : (tok += 1) {
+            const tok_tag = ast.tokenTag(tok);
+            const norm = normalizeTokenTag(tok_tag);
+            const tok_bucket = featureBucket(norm);
+            features[tok_bucket] +|= 1;
+            token_count += 1;
+        }
     }
 
-    // Find duplicates with increased threshold to reduce false positives
-    const options = DetectionOptions{
-        .min_lines = 8,
-        .min_statements = 3,
-        .exclude_error_handling = true,
+    return .{
+        .line = loc.line,
+        .stmt_count = statements.len,
+        .token_count = token_count,
+        .exact_sig = blockSignature(ast, statements),
+        .features = features,
     };
+}
 
-    var dups = try findDuplicates(allocator, source, options);
-    defer dups.deinit();
+fn findBestMatch(seen: []const BlockShape, current: BlockShape, min_similarity: f64) ?BlockMatch {
+    var best_score: f64 = 0.0;
+    var best_line: usize = 0;
 
-    for (dups.items) |dup| {
-        const message = try std.fmt.allocPrint(allocator, "Found {d} lines of duplicated code (similarity: {d:.0}%) starting at lines {d} and {d}", .{
-            dup.length,
-            dup.similarity * 100.0,
-            dup.start_line_1,
-            dup.start_line_2,
-        });
-        try messages.append(allocator, message);
-
-        try ctx.addDiagnostic(
-            "duplicated-code",
-            .warning,
-            dup.start_line_1,
-            1,
-            message,
-        );
+    for (seen) |candidate| {
+        const score = similarityScore(candidate, current);
+        if (score > best_score) {
+            best_score = score;
+            best_line = candidate.line;
+        }
     }
 
-    // Find branch duplicates
-    var branch_dups = try findBranchDuplicates(allocator, source);
-    defer branch_dups.deinit();
+    if (best_score < min_similarity) return null;
+    return .{ .line = best_line, .similarity = best_score };
+}
 
-    for (branch_dups.items) |dup| {
-        const message = try std.fmt.allocPrint(allocator, "if/else branches contain duplicated code at lines {d} and {d}", .{
-            dup.start_line_1,
-            dup.start_line_2,
-        });
-        try messages.append(allocator, message);
+fn similarityScore(a: BlockShape, b: BlockShape) f64 {
+    if (a.exact_sig == b.exact_sig) return 1.0;
 
-        try ctx.addDiagnostic(
-            "duplicated-code",
-            .warning,
-            dup.start_line_1,
-            1,
-            message,
-        );
+    const stmt_diff = if (a.stmt_count >= b.stmt_count) a.stmt_count - b.stmt_count else b.stmt_count - a.stmt_count;
+    if (stmt_diff > 1) return 0.0;
+    if (a.token_count == 0 or b.token_count == 0) return 0.0;
+
+    var dot: f64 = 0.0;
+    var norm_a: f64 = 0.0;
+    var norm_b: f64 = 0.0;
+
+    for (0..feature_bins) |i| {
+        const av = @as(f64, @floatFromInt(a.features[i]));
+        const bv = @as(f64, @floatFromInt(b.features[i]));
+        dot += av * bv;
+        norm_a += av * av;
+        norm_b += bv * bv;
     }
+
+    if (norm_a == 0.0 or norm_b == 0.0) return 0.0;
+    return dot / (@sqrt(norm_a) * @sqrt(norm_b));
 }
 
-// ========================================
-// Tests
-// ========================================
-
-test "extractBlocks returns empty list for empty source" {
-    const allocator = std.testing.allocator;
-
-    var blocks = try extractBlocks(allocator, "");
-    defer blocks.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), blocks.items.len);
+fn featureBucket(value: u16) usize {
+    const mixed = @as(usize, value) * 1315423911;
+    return mixed % feature_bins;
 }
 
-test "extractBlocks finds single function body" {
-    const allocator = std.testing.allocator;
-
-    const source = "pub fn foo() void { const x = 1; }";
-    var blocks = try extractBlocks(allocator, source);
-    defer blocks.deinit();
-
-    try std.testing.expectEqual(@as(usize, 1), blocks.items.len);
+fn isBlockTag(tag: std.zig.Ast.Node.Tag) bool {
+    return switch (tag) {
+        .block, .block_semicolon, .block_two, .block_two_semicolon => true,
+        else => false,
+    };
 }
 
-test "extractBlocks finds two function bodies" {
-    const allocator = std.testing.allocator;
-
-    const source =
-        "pub fn foo() void { const x = 1; }" ++
-        "pub fn bar() void { const y = 2; }";
-
-    var blocks = try extractBlocks(allocator, source);
-    defer blocks.deinit();
-
-    try std.testing.expectEqual(@as(usize, 2), blocks.items.len);
+fn lineSpan(ast: std.zig.Ast, source: []const u8, node: std.zig.Ast.Node.Index) usize {
+    const first = ast.firstToken(node);
+    const last = ast.lastToken(node);
+    const start_loc = locations.getTokenLocation(ast, first, source);
+    const end_loc = locations.getTokenLocation(ast, last, source);
+    return if (end_loc.line >= start_loc.line) end_loc.line - start_loc.line + 1 else 1;
 }
 
-test "normalizeCode replaces identifiers with placeholders" {
-    const allocator = std.testing.allocator;
+fn blockSignature(ast: std.zig.Ast, statements: []const std.zig.Ast.Node.Index) u64 {
+    var hasher = std.hash.Wyhash.init(0);
 
-    const source = "const user_id = 123;";
-    const normalized = try normalizeCode(allocator, source);
-    defer allocator.free(normalized);
+    for (statements) |stmt| {
+        const tag_val: u16 = @intFromEnum(ast.nodeTag(stmt));
+        hasher.update(std.mem.asBytes(&tag_val));
 
-    try std.testing.expect(std.mem.indexOf(u8, normalized, "$VAR") != null);
-    try std.testing.expect(std.mem.indexOf(u8, normalized, "user_id") == null);
+        const first = ast.firstToken(stmt);
+        const last = ast.lastToken(stmt);
+        var tok = first;
+        while (tok <= last) : (tok += 1) {
+            const tok_tag = ast.tokenTag(tok);
+            const norm = normalizeTokenTag(tok_tag);
+            hasher.update(std.mem.asBytes(&norm));
+        }
+    }
+
+    return hasher.final();
 }
 
-test "normalizeCode produces same output for structurally similar code" {
-    const allocator = std.testing.allocator;
-
-    const source1 = "const a = x + y;";
-    const source2 = "const b = m + n;";
-
-    const norm1 = try normalizeCode(allocator, source1);
-    defer allocator.free(norm1);
-    const norm2 = try normalizeCode(allocator, source2);
-    defer allocator.free(norm2);
-
-    try std.testing.expectEqualStrings(norm1, norm2);
-}
-
-test "findDuplicates returns empty list for different code" {
-    const allocator = std.testing.allocator;
-
-    const source = "pub fn foo() {} pub fn bar() {}";
-    var dups = try findDuplicates(allocator, source, .{});
-    defer dups.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), dups.items.len);
-}
-
-test "findDuplicates detects exact 5-line duplicate" {
-    const allocator = std.testing.allocator;
-
-    const source =
-        "pub fn foo() void {\n" ++
-        "    const a = 1;\n" ++
-        "    const b = 2;\n" ++
-        "    const c = 3;\n" ++
-        "    const d = 4;\n" ++
-        "    const e = 5;\n" ++
-        "}\n" ++
-        "\n" ++
-        "pub fn bar() void {\n" ++
-        "    const a = 1;\n" ++
-        "    const b = 2;\n" ++
-        "    const c = 3;\n" ++
-        "    const d = 4;\n" ++
-        "    const e = 5;\n" ++
-        "}\n";
-
-    var dups = try findDuplicates(allocator, source, .{ .min_lines = 5 });
-    defer dups.deinit();
-
-    try std.testing.expect(dups.items.len > 0);
-}
-
-test "findDuplicates detects duplicates with different variable names" {
-    const allocator = std.testing.allocator;
-
-    const source =
-        "pub fn foo() void {\n" ++
-        "    const user_id = 1;\n" ++
-        "    const user_name = \"test\";\n" ++
-        "    save(user_id, user_name);\n" ++
-        "}\n" ++
-        "\n" ++
-        "pub fn bar() void {\n" ++
-        "    const order_id = 1;\n" ++
-        "    const order_name = \"test\";\n" ++
-        "    save(order_id, order_name);\n" ++
-        "}\n";
-
-    var dups = try findDuplicates(allocator, source, .{ .min_lines = 3 });
-    defer dups.deinit();
-
-    try std.testing.expect(dups.items.len > 0);
-}
-
-test "findDuplicates does not detect 4-line as duplicate when threshold is 5" {
-    const allocator = std.testing.allocator;
-
-    const source =
-        "pub fn foo() void {\n" ++
-        "    const a = 1;\n" ++
-        "    const b = 2;\n" ++
-        "    const c = 3;\n" ++
-        "    const d = 4;\n" ++
-        "}\n" ++
-        "\n" ++
-        "pub fn bar() void {\n" ++
-        "    const a = 1;\n" ++
-        "    const b = 2;\n" ++
-        "    const c = 3;\n" ++
-        "    const d = 4;\n" ++
-        "}\n";
-
-    var dups = try findDuplicates(allocator, source, .{ .min_lines = 5 });
-    defer dups.deinit();
-
-    try std.testing.expectEqual(@as(usize, 0), dups.items.len);
-}
-
-test "findBranchDuplicates detects duplicate if/else branches" {
-    const allocator = std.testing.allocator;
-
-    const source =
-        "pub fn test() void {\n" ++
-        "    if (cond) {\n" ++
-        "        const x = 1;\n" ++
-        "        const y = 2;\n" ++
-        "        process(x, y);\n" ++
-        "    } else {\n" ++
-        "        const a = 1;\n" ++
-        "        const b = 2;\n" ++
-        "        process(a, b);\n" ++
-        "    }\n" ++
-        "}\n";
-
-    var dups = try findBranchDuplicates(allocator, source);
-    defer dups.deinit();
-
-    try std.testing.expect(dups.items.len > 0);
+fn normalizeTokenTag(tag: std.zig.Token.Tag) u16 {
+    return switch (tag) {
+        .identifier => 1,
+        .number_literal => 2,
+        .char_literal, .multiline_string_literal_line, .string_literal, .invalid => 3,
+        else => @as(u16, @intCast(@intFromEnum(tag))) + 100,
+    };
 }
