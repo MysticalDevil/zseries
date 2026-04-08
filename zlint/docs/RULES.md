@@ -3,37 +3,40 @@
 This document describes the current rule set in `zlint`.
 
 - Canonical rule IDs use `snake_case`.
-- Legacy `ZAIxxx` labels are history only and are not accepted by config/suppressions.
+- `ZAIxxx` is the documentation/catalog number only and is not accepted by config/suppressions.
 - Rule config keys are also `snake_case`.
 
 ---
 
 ## Rule index
 
-| Legacy | rule_id | Default | Severity (default) | Status |
+| Number | rule_id | Default | Severity (default) | Status |
 | --- | --- | --- | --- | --- |
 | `ZAI001` | `discarded_result` | on | `error` | implemented |
 | `ZAI002` | `max_anytype_params` | on | `error` | implemented |
 | `ZAI003` | `no_silent_error_handling` | on | `warning` | implemented |
-| `-` | `discard_assignment` | off | `warning` | implemented (opt-in) |
-| `ZAI004` | `catch_unreachable` | on | mixed (`error`/`warning`) | implemented |
-| `ZAI005` | `defer_return_invalid` | on | `error` | implemented |
-| `ZAI006` | `unused_allocator` | on | `error` | implemented |
-| `ZAI007` | `global_allocator_in_lib` | on | `error` | implemented |
-| `ZAI008` | `no_do_not_optimize_away` | on | `error` | implemented |
-| `ZAI011` | `duplicated_code` | on | `warning` | implemented |
-| `ZAI016` | `no_anytype_io_params` | on | `error` | implemented |
+| `ZAI004` | `discard_assignment` | off | `warning` | implemented (opt-in) |
+| `ZAI005` | `catch_unreachable` | on | `error` | implemented |
+| `ZAI006` | `orelse_unreachable` | on | `error` | implemented |
+| `ZAI007` | `unwrap_optional` | on | `warning` | implemented |
+| `ZAI008` | `suspicious_cast_chain` | on | `warning` | implemented |
+| `ZAI009` | `defer_return_invalid` | on | `error` | implemented |
+| `ZAI010` | `unused_allocator` | on | `error` | implemented |
+| `ZAI011` | `global_allocator_in_lib` | on | `error` | implemented |
+| `ZAI012` | `no_do_not_optimize_away` | on | `error` | implemented |
+| `ZAI013` | `duplicated_code` | on | `warning` | implemented |
+| `ZAI014` | `no_anytype_io_params` | on | `error` | implemented |
+| `ZAI015` | `no_anyerror_return` | on | `warning` | implemented |
 
 ### Planned (not implemented)
 
-| Legacy | tentative rule_id | Description | Priority |
+| Number | tentative rule_id | Description | Priority |
 | --- | --- | --- | --- |
-| `ZAI009` | `log_print_instead_of_error_handling` | `log/print` in place of real error handling | P1 |
-| `ZAI010` | `suspicious_cast_chain` | suspicious `@ptrCast/@alignCast/@constCast/@bitCast` chains | P1 |
-| `ZAI012` | `placeholder_impl_in_production` | TODO/stub/dummy placeholders in production path | P2 |
-| `ZAI013` | `overbroad_pub` | visibility too broad (`pub`) | P2 |
-| `ZAI014` | `fake_anytype_generic` | pseudo-generic `anytype` misuse | P1/P2 |
-| `ZAI015` | `over_wrapped_abstraction` | empty wrapper/over-abstraction patterns | P3 |
+| `ZAI016` | `log_print_instead_of_error_handling` | `log/print` in place of real error handling | P1 |
+| `ZAI017` | `placeholder_impl_in_production` | TODO/stub/dummy placeholders in production path | P2 |
+| `ZAI018` | `overbroad_pub` | visibility too broad (`pub`) | P2 |
+| `ZAI019` | `fake_anytype_generic` | pseudo-generic `anytype` misuse | P1/P2 |
+| `ZAI020` | `over_wrapped_abstraction` | empty wrapper/over-abstraction patterns | P3 |
 
 ---
 
@@ -150,21 +153,65 @@ severity = "warning"
 
 ### `catch_unreachable`
 
-Detects:
-
-- `catch unreachable` (reported as `error`)
-- `orelse unreachable` (reported as `error`)
-- optional unwrap `.?` (reported as `warning`)
-
-Notes:
-
-- This rule uses fixed severity by pattern (`error`/`warning`) rather than one uniform level.
-- It respects `scan.skip_tests`.
+Detects `catch unreachable`.
 
 ```toml
 [rules.catch_unreachable]
 enabled = true
 severity = "error"
+```
+
+### `orelse_unreachable`
+
+Detects `orelse unreachable`.
+
+```toml
+[rules.orelse_unreachable]
+enabled = true
+severity = "error"
+```
+
+### `unwrap_optional`
+
+Detects optional unwrap `.?`.
+
+Notes:
+
+- default severity is `warning`
+- respects `scan.skip_tests`
+
+```toml
+[rules.unwrap_optional]
+enabled = true
+severity = "warning"
+```
+
+### `suspicious_cast_chain`
+
+Detects suspicious nested pointer-cast builtin chains.
+
+Current detection scope:
+
+- `@ptrCast`
+- `@alignCast`
+- `@constCast`
+- `@bitCast`
+
+Current behavior:
+
+- reports nested chains such as `@bitCast(@ptrCast(x))`
+- reports longer mixed chains such as `@bitCast(@ptrCast(@alignCast(x)))`
+- does not report standalone single casts
+- does not report numeric cast chains such as `@intCast` / `@truncate`
+- standalone `@constCast(x)` is not reported
+- common opaque-context bridge patterns are downgraded to `help`
+  - `@ptrCast(@alignCast(ctx))`
+  - `@ptrCast(@constCast(&value))`
+
+```toml
+[rules.suspicious_cast_chain]
+enabled = true
+severity = "warning"
 ```
 
 ### `defer_return_invalid`
@@ -276,6 +323,24 @@ io_param_aliases = ["writer", "reader", "w", "r"]
 allow_types = ["myio.Writer"]
 ```
 
+### `no_anyerror_return`
+
+Detects explicit `anyerror!T` return types on ordinary function declarations.
+
+Current behavior:
+
+- reports `fn foo() anyerror!T`
+- does not report inferred `fn foo() !T`
+- does not report function pointer or callback type signatures
+- does not report standalone `anyerror` type positions
+- respects `scan.skip_tests`
+
+```toml
+[rules.no_anyerror_return]
+enabled = true
+severity = "warning"
+```
+
 ---
 
 ## Runtime / output behavior
@@ -329,6 +394,10 @@ allow_names = ["deinit", "free"]
 [rules.max_anytype_params]
 enabled = true
 max = 2
+
+[rules.unwrap_optional]
+enabled = true
+severity = "warning"
 
 [rules.no_anytype_io_params]
 enabled = true

@@ -257,7 +257,7 @@ fn takeValue(args: []const []const u8, i: *usize, comptime err: anyerror) ![]con
     return args[i.*];
 }
 
-/// Exit codes as per PLAN.md
+/// CLI exit codes
 pub const ExitCode = enum(u8) {
     ok = 0,
     has_errors = 1,

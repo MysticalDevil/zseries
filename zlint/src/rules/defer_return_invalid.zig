@@ -4,7 +4,7 @@ const Severity = @import("../diagnostic.zig").Severity;
 const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
 
-/// ZAI005: Detect returning resources after defer deinit
+/// ZAI009: Detect returning resources after defer deinit
 pub fn run(ctx: *RuleContext) !void {
     if (ctx.shouldSkipFile()) return;
 

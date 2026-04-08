@@ -4,36 +4,41 @@ const Severity = @import("../diagnostic.zig").Severity;
 const AstUtils = @import("utils.zig").AstUtils;
 const rule_ids = @import("../rule_ids.zig");
 
-/// ZAI005: Detect catch unreachable patterns
+/// ZAI007: Detect optional unwrap (.?) patterns
 pub fn run(ctx: *RuleContext) !void {
     if (ctx.shouldSkipFile()) return;
+
+    var severity = Severity.warning;
+    if (ctx.config.rules.unwrap_optional) |cfg| {
+        severity = Severity.fromString(cfg.base.severity) orelse Severity.warning;
+    }
 
     const ast = ctx.file.ast;
     const tags = ast.nodes.items(.tag);
 
     for (tags, 0..) |tag, i| {
-        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (tag != .unwrap_optional) continue;
 
+        const node: std.zig.Ast.Node.Index = @enumFromInt(i);
         if (ctx.shouldSkipNode(node)) continue;
 
-        if (tag == .@"catch") {
-            ctx.traceNodeBestEffort(2, node, "inspect");
-            const rhs = AstUtils.getRhs(ast, node);
-            if (AstUtils.isNodeTag(ast, rhs, .unreachable_literal)) {
-                ctx.traceNodeBestEffort(2, node, "match");
-                try AstUtils.addDiagnosticAtNode(
-                    ctx,
-                    rule_ids.catch_unreachable,
-                    Severity.err,
-                    node,
-                    "catch unreachable suppresses error handling - use proper error handling instead",
-                );
-            }
-        }
+        ctx.traceNodeBestEffort(2, node, "match");
+        try AstUtils.addDiagnosticAtNode(
+            ctx,
+            rule_ids.unwrap_optional,
+            severity,
+            node,
+            "optional unwrap (.?) may panic - consider explicit null handling with orelse",
+        );
     }
 }
 
-fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8, expected: usize) !void {
+fn expectRuleHitsWithAllocator(
+    allocator: std.mem.Allocator,
+    source: []const u8,
+    path: []const u8,
+    expected: usize,
+) !void {
     const content = try allocator.dupeZ(u8, source);
     defer allocator.free(content);
 
@@ -47,7 +52,7 @@ fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8,
 
     var file = SourceFile{
         .allocator = allocator,
-        .path = "src/sample.zig",
+        .path = path,
         .content = content,
         .ast = ast,
     };
@@ -60,7 +65,7 @@ fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8,
 
     const cfg = Config{
         .rules = .{
-            .catch_unreachable = .{},
+            .unwrap_optional = .{},
         },
     };
 
@@ -76,27 +81,34 @@ fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8,
 
     try std.testing.expectEqual(expected, diagnostics.items.items.len);
     for (diagnostics.items.items) |diag| {
-        try std.testing.expectEqualStrings(rule_ids.catch_unreachable, diag.rule_id);
-        try std.testing.expectEqual(Severity.err, diag.severity);
+        try std.testing.expectEqualStrings(rule_ids.unwrap_optional, diag.rule_id);
+        try std.testing.expectEqual(Severity.warning, diag.severity);
     }
 }
 
-test "detects catch unreachable" {
+test "detects optional unwrap" {
     const source =
-        \\fn fallible() anyerror!u8 { return 1; }
-        \\fn demo() u8 {
-        \\    return fallible() catch unreachable;
+        \\fn demo(maybe: ?u8) u8 {
+        \\    return maybe.?;
         \\}
     ;
-    try expectRuleHitsWithAllocator(std.testing.allocator, source, 1);
+    try expectRuleHitsWithAllocator(std.testing.allocator, source, "src/sample.zig", 1);
 }
 
-test "does not detect catch return" {
+test "does not detect explicit orelse handling" {
     const source =
-        \\fn fallible() anyerror!u8 { return 1; }
-        \\fn demo() u8 {
-        \\    return fallible() catch return 0;
+        \\fn demo(maybe: ?u8) u8 {
+        \\    return maybe orelse 0;
         \\}
     ;
-    try expectRuleHitsWithAllocator(std.testing.allocator, source, 0);
+    try expectRuleHitsWithAllocator(std.testing.allocator, source, "src/sample.zig", 0);
+}
+
+test "skips test files by default" {
+    const source =
+        \\fn demo(maybe: ?u8) u8 {
+        \\    return maybe.?;
+        \\}
+    ;
+    try expectRuleHitsWithAllocator(std.testing.allocator, source, "src/sample_test.zig", 0);
 }

@@ -12,6 +12,10 @@ const discarded_result = @import("discarded_result.zig");
 const max_anytype_params = @import("max_anytype_params.zig");
 const no_silent_error_handling = @import("no_silent_error_handling.zig");
 const catch_unreachable = @import("catch_unreachable.zig");
+const orelse_unreachable = @import("orelse_unreachable.zig");
+const unwrap_optional = @import("unwrap_optional.zig");
+const suspicious_cast_chain = @import("suspicious_cast_chain.zig");
+const no_anyerror_return = @import("no_anyerror_return.zig");
 const defer_return_invalid = @import("defer_return_invalid.zig");
 const unused_allocator = @import("unused_allocator.zig");
 const global_allocator_in_lib = @import("global_allocator_in_lib.zig");
@@ -112,6 +116,10 @@ const ALL_RULES: []const RuleEntry = &.{
     .{ .id = rule_ids.no_silent_error_handling, .name = "no_silent_error_handling", .run = no_silent_error_handling.run },
     .{ .id = rule_ids.discard_assignment, .name = "discard_assignment", .run = discard_assignment.run },
     .{ .id = rule_ids.catch_unreachable, .name = "catch_unreachable", .run = catch_unreachable.run },
+    .{ .id = rule_ids.orelse_unreachable, .name = "orelse_unreachable", .run = orelse_unreachable.run },
+    .{ .id = rule_ids.unwrap_optional, .name = "unwrap_optional", .run = unwrap_optional.run },
+    .{ .id = rule_ids.suspicious_cast_chain, .name = "suspicious_cast_chain", .run = suspicious_cast_chain.run },
+    .{ .id = rule_ids.no_anyerror_return, .name = "no_anyerror_return", .run = no_anyerror_return.run },
     .{ .id = rule_ids.defer_return_invalid, .name = "defer_return_invalid", .run = defer_return_invalid.run },
     .{ .id = rule_ids.unused_allocator, .name = "unused_allocator", .run = unused_allocator.run },
     .{ .id = rule_ids.global_allocator_in_lib, .name = "global_allocator_in_lib", .run = global_allocator_in_lib.run },
@@ -126,6 +134,10 @@ const DEFAULT_ENABLED_RULES: []const []const u8 = &.{
     "max_anytype_params",
     "no_silent_error_handling",
     "catch_unreachable",
+    "orelse_unreachable",
+    "unwrap_optional",
+    "suspicious_cast_chain",
+    "no_anyerror_return",
     "defer_return_invalid",
     "unused_allocator",
     "global_allocator_in_lib",

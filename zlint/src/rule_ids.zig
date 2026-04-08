@@ -4,6 +4,10 @@ pub const discarded_result = "discarded_result";
 pub const max_anytype_params = "max_anytype_params";
 pub const no_silent_error_handling = "no_silent_error_handling";
 pub const catch_unreachable = "catch_unreachable";
+pub const orelse_unreachable = "orelse_unreachable";
+pub const unwrap_optional = "unwrap_optional";
+pub const suspicious_cast_chain = "suspicious_cast_chain";
+pub const no_anyerror_return = "no_anyerror_return";
 pub const defer_return_invalid = "defer_return_invalid";
 pub const unused_allocator = "unused_allocator";
 pub const global_allocator_in_lib = "global_allocator_in_lib";
@@ -17,6 +21,10 @@ pub const all: []const []const u8 = &.{
     max_anytype_params,
     no_silent_error_handling,
     catch_unreachable,
+    orelse_unreachable,
+    unwrap_optional,
+    suspicious_cast_chain,
+    no_anyerror_return,
     defer_return_invalid,
     unused_allocator,
     global_allocator_in_lib,

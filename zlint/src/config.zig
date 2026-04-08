@@ -33,6 +33,10 @@ pub const Config = struct {
         no_silent_error_handling: ?NoSilentErrorHandlingConfig = null,
         discard_assignment: ?DiscardAssignmentConfig = null,
         catch_unreachable: ?CatchUnreachableConfig = null,
+        orelse_unreachable: ?OrelseUnreachableConfig = null,
+        unwrap_optional: ?UnwrapOptionalConfig = null,
+        suspicious_cast_chain: ?SuspiciousCastChainConfig = null,
+        no_anyerror_return: ?NoAnyerrorReturnConfig = null,
         defer_return_invalid: ?DeferReturnInvalidConfig = null,
         no_do_not_optimize_away: ?NoDoNotOptimizeAwayConfig = null,
         unused_allocator: ?UnusedAllocatorConfig = null,
@@ -67,6 +71,22 @@ pub const Config = struct {
 
     pub const CatchUnreachableConfig = struct {
         base: BaseRuleConfig = .{},
+    };
+
+    pub const OrelseUnreachableConfig = struct {
+        base: BaseRuleConfig = .{},
+    };
+
+    pub const UnwrapOptionalConfig = struct {
+        base: BaseRuleConfig = .{ .severity = "warning" },
+    };
+
+    pub const SuspiciousCastChainConfig = struct {
+        base: BaseRuleConfig = .{ .severity = "warning" },
+    };
+
+    pub const NoAnyerrorReturnConfig = struct {
+        base: BaseRuleConfig = .{ .severity = "warning" },
     };
 
     pub const DeferReturnInvalidConfig = struct {
@@ -181,6 +201,10 @@ const RuleKey = enum {
     no_silent_error_handling,
     discard_assignment,
     catch_unreachable,
+    orelse_unreachable,
+    unwrap_optional,
+    suspicious_cast_chain,
+    no_anyerror_return,
     defer_return_invalid,
     unused_allocator,
     global_allocator_in_lib,
@@ -252,6 +276,10 @@ fn parseRuleEntry(
         .no_silent_error_handling => try parseBaseOnlyRule("no_silent_error_handling", Config.NoSilentErrorHandlingConfig, rules_cfg, rule_node, cfg, "rules.no_silent_error_handling"),
         .discard_assignment => try parseBaseOnlyRule("discard_assignment", Config.DiscardAssignmentConfig, rules_cfg, rule_node, cfg, "rules.discard_assignment"),
         .catch_unreachable => try parseBaseOnlyRule("catch_unreachable", Config.CatchUnreachableConfig, rules_cfg, rule_node, cfg, "rules.catch_unreachable"),
+        .orelse_unreachable => try parseBaseOnlyRule("orelse_unreachable", Config.OrelseUnreachableConfig, rules_cfg, rule_node, cfg, "rules.orelse_unreachable"),
+        .unwrap_optional => try parseBaseOnlyRule("unwrap_optional", Config.UnwrapOptionalConfig, rules_cfg, rule_node, cfg, "rules.unwrap_optional"),
+        .suspicious_cast_chain => try parseBaseOnlyRule("suspicious_cast_chain", Config.SuspiciousCastChainConfig, rules_cfg, rule_node, cfg, "rules.suspicious_cast_chain"),
+        .no_anyerror_return => try parseBaseOnlyRule("no_anyerror_return", Config.NoAnyerrorReturnConfig, rules_cfg, rule_node, cfg, "rules.no_anyerror_return"),
         .defer_return_invalid => try parseBaseOnlyRule("defer_return_invalid", Config.DeferReturnInvalidConfig, rules_cfg, rule_node, cfg, "rules.defer_return_invalid"),
         .unused_allocator => try parseBaseOnlyRule("unused_allocator", Config.UnusedAllocatorConfig, rules_cfg, rule_node, cfg, "rules.unused_allocator"),
         .global_allocator_in_lib => try parseBaseOnlyRule("global_allocator_in_lib", Config.GlobalAllocatorInLibConfig, rules_cfg, rule_node, cfg, "rules.global_allocator_in_lib"),
