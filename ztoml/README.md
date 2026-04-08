@@ -1,17 +1,21 @@
 # ztoml
 
-A TOML parsing library for Zig 0.16+ with DOM-style API.
+`ztoml` is a TOML parser for Zig with a DOM-style `Value` API.
 
-## Features
+## Current Status
 
-- Parse TOML source into a DOM tree (Value type)
-- Serialize Value back to TOML string
-- Support for basic TOML types: strings, integers, floats, booleans, arrays, tables
-- Dotted keys and nested tables
-- Array of tables (`[[table]]` syntax)
-- Inline tables
+- Maintained inside the `zseries` monorepo
+- Has a `build.zig.zon`, so monorepo-local path dependencies are straightforward
+- Positioned as a parser + value tree, not as a schema/serde framework
 
-## Usage
+## Build And Test
+
+```bash
+zig build
+zig build test
+```
+
+## Basic Usage
 
 ```zig
 const std = @import("std");
@@ -21,48 +25,51 @@ const source =
     \\[server]
     \\host = "localhost"
     \\port = 8080
-    \\
-    \\[database]
-    \\name = "mydb"
-    \\connections = 10
 ;
 
-var value = try ztoml.parseString(allocator, source);
-defer value.deinit(allocator);
+pub fn main() !void {
+    const allocator = std.heap.page_allocator;
 
-// Access values
-const host = value.get("server").?.get("host").?.getString();
-const port = value.get("server").?.get("port").?.getInteger();
+    var value = try ztoml.parseString(allocator, source);
+    defer value.deinit(allocator);
+
+    const server = value.get("server").?;
+    const host = server.get("host").?.getString();
+    const port = server.get("port").?.getInteger();
+
+    _ = host;
+    _ = port;
+}
 ```
 
-## API
+## Public Surface
 
-### Parsing
+- `parse` / `parseFile`: parse TOML into a `Value` tree
+- `tokenize`, `Lexer`, `Token`, `TokenType`: lexer-level interfaces
+- `Value`: DOM value type for strings, numbers, booleans, arrays, tables, and
+  datetime values
+- `Error`, `ErrorSet`, `makeError`, `makeParseError`: parse and reporting
+  helpers
 
-- `parseString(allocator, source)` - Parse TOML string into Value
-- `parseFile(allocator, path)` - Parse TOML file into Value
+## Module Map
 
-### Value Access
+- `src/lexer.zig`: tokenization and low-level TOML lexing
+- `src/parser.zig`: TOML parsing into the DOM tree
+- `src/value.zig`: the `Value` representation and access helpers
+- `src/error.zig`: structured parse errors and formatting helpers
+- `src/root.zig`: public exports
 
-- `value.get(key)` - Get value from table by key
-- `value.at(index)` - Get value from array by index
-- `value.getString()` - Get string value
-- `value.getInteger()` - Get integer value
-- `value.getFloat()` - Get float value
-- `value.getBoolean()` - Get boolean value
-- `value.getTable()` - Get table value
-- `value.getArray()` - Get array value
+## Consumption Notes
 
-### Serialization
+Inside this monorepo, depend on `ztoml` as a normal local package. For other
+projects, vendor or path-depend on the package root rather than trying to fetch
+the whole monorepo archive as a package.
 
-- `ztoml.toString(allocator, value)` - Serialize Value to string
+## Scope And Limitations
 
-## Build
-
-```bash
-zig build
-zig build test
-```
+- DOM-style API only; no derive/schema layer
+- The main contract is parse + inspect + serialize
+- Maintained against the Zig 0.16-era toolchain used by this workspace
 
 ## License
 
