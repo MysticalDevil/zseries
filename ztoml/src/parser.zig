@@ -215,95 +215,40 @@ const Parser = struct {
 
         const value = try self.parseValue();
 
-        // Navigate/create the table path
-        var current: *Value = root;
-        for (key_parts, 0..) |part, i| {
-            const is_last = i == key_parts.len - 1;
-
-            switch (current.*) {
-                .Table => |*t| {
-                    if (is_last) {
-                        try t.put(part, value);
-                    } else {
-                        const existing = t.getPtr(part);
-                        if (existing) |e| {
-                            if (!e.isTable()) {
-                                // Cannot extend non-table
-                                return ErrorSet.InvalidTable;
-                            }
-                            current = e;
-                        } else {
-                            const new_table = Value.table(self.allocator);
-                            try t.put(part, new_table);
-                            current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
-                        }
-                    }
-                },
-                else => return ErrorSet.InvalidTable,
-            }
+        const table = try self.ensureTablePath(root, key_parts[0 .. key_parts.len - 1]);
+        switch (table.*) {
+            .Table => |*t| try t.put(key_parts[key_parts.len - 1], value),
+            else => return ErrorSet.InvalidTable,
         }
+    }
+
+    fn parseHeaderKeyParts(self: *Parser, open: TokenType, close: TokenType) ErrorSet![][]const u8 {
+        try self.expect(open);
+
+        const key_parts = try self.parseDottedKey();
+        errdefer self.allocator.free(key_parts);
+
+        try self.expect(close);
+        return key_parts;
     }
 
     /// Parse a table header like [table]
     fn parseTableHeader(self: *Parser, root: *Value) ErrorSet!void {
-        try self.expect(.LeftBracket);
-
-        const key_parts = try self.parseDottedKey();
+        const key_parts = try self.parseHeaderKeyParts(.LeftBracket, .RightBracket);
         defer self.allocator.free(key_parts);
 
-        try self.expect(.RightBracket);
-
-        // Create or get the table
-        var current: *Value = root;
-        for (key_parts) |part| {
-            switch (current.*) {
-                .Table => |*t| {
-                    const existing = t.getPtr(part);
-                    if (existing) |e| {
-                        current = e;
-                    } else {
-                        const new_table = Value.table(self.allocator);
-                        try t.put(part, new_table);
-                        current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
-                    }
-                },
-                else => return ErrorSet.InvalidTable,
-            }
-        }
-
-        // Update current table context
-        self.current_table = current;
+        self.current_table = try self.ensureTablePath(root, key_parts);
     }
 
     /// Parse an array of tables header like [[table]]
     fn parseArrayTableHeader(self: *Parser, root: *Value) ErrorSet!void {
-        try self.expect(.LeftDoubleBracket);
-
-        const key_parts = try self.parseDottedKey();
+        const key_parts = try self.parseHeaderKeyParts(.LeftDoubleBracket, .RightDoubleBracket);
         defer self.allocator.free(key_parts);
 
-        try self.expect(.RightDoubleBracket);
-
-        // Navigate to parent and append new table
-        var current: *Value = root;
         const parent_parts = key_parts[0 .. key_parts.len - 1];
         const last_key = key_parts[key_parts.len - 1];
 
-        for (parent_parts) |part| {
-            switch (current.*) {
-                .Table => |*t| {
-                    const existing = t.getPtr(part);
-                    if (existing) |e| {
-                        current = e;
-                    } else {
-                        const new_table = Value.table(self.allocator);
-                        try t.put(part, new_table);
-                        current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
-                    }
-                },
-                else => return ErrorSet.InvalidTable,
-            }
-        }
+        const current = try self.ensureTablePath(root, parent_parts);
 
         // Add new table to array
         switch (current.*) {
@@ -332,40 +277,39 @@ const Parser = struct {
             else => return ErrorSet.InvalidTable,
         }
     }
+
+    fn ensureTablePath(self: *Parser, root: *Value, parts: []const []const u8) ErrorSet!*Value {
+        var current: *Value = root;
+        for (parts) |part| {
+            switch (current.*) {
+                .Table => |*t| {
+                    if (t.getPtr(part)) |existing| {
+                        if (!existing.isTable()) return ErrorSet.InvalidTable;
+                        current = existing;
+                    } else {
+                        try t.put(part, Value.table(self.allocator));
+                        current = t.getPtr(part) orelse return ErrorSet.InvalidTable;
+                    }
+                },
+                else => return ErrorSet.InvalidTable,
+            }
+        }
+        return current;
+    }
 };
 
 /// Parse an integer from text
 fn parseInteger(text: []const u8) ErrorSet!i64 {
-    // Remove underscores
     var buf: [64]u8 = undefined;
-    if (text.len > buf.len) return ErrorSet.InvalidNumber;
-
-    var i: usize = 0;
-    for (text) |c| {
-        if (c != '_') {
-            buf[i] = c;
-            i += 1;
-        }
-    }
-    const cleaned = buf[0..i];
+    const cleaned = try stripUnderscores(text, &buf);
 
     return std.fmt.parseInt(i64, cleaned, 0) catch return ErrorSet.InvalidNumber;
 }
 
 /// Parse a float from text
 fn parseFloat(text: []const u8) ErrorSet!f64 {
-    // Remove underscores
     var buf: [64]u8 = undefined;
-    if (text.len > buf.len) return ErrorSet.InvalidNumber;
-
-    var i: usize = 0;
-    for (text) |c| {
-        if (c != '_') {
-            buf[i] = c;
-            i += 1;
-        }
-    }
-    const cleaned = buf[0..i];
+    const cleaned = try stripUnderscores(text, &buf);
 
     // Handle special values
     if (std.mem.eql(u8, cleaned, "inf") or std.mem.eql(u8, cleaned, "+inf")) {
@@ -382,6 +326,19 @@ fn parseFloat(text: []const u8) ErrorSet!f64 {
     }
 
     return std.fmt.parseFloat(f64, cleaned) catch return ErrorSet.InvalidNumber;
+}
+
+fn stripUnderscores(text: []const u8, buf: *[64]u8) ErrorSet![]const u8 {
+    if (text.len > buf.len) return ErrorSet.InvalidNumber;
+
+    var i: usize = 0;
+    for (text) |c| {
+        if (c != '_') {
+            buf[i] = c;
+            i += 1;
+        }
+    }
+    return buf[0..i];
 }
 
 /// Parse TOML source into a Value tree

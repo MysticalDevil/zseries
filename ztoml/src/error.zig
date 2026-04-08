@@ -12,7 +12,7 @@ pub const Error = struct {
         self: Error,
         comptime fmt: []const u8,
         options: std.fmt.FormatOptions,
-        writer: anytype,
+        writer: *std.Io.Writer,
     ) !void {
         _ = fmt;
         _ = options;

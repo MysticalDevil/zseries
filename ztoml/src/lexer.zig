@@ -119,12 +119,7 @@ pub const Lexer = struct {
 
         self.advance(); // consume closing quote
 
-        return .{
-            .type = .String,
-            .text = self.source[start_pos..self.pos],
-            .line = start_line,
-            .column = start_col,
-        };
+        return self.tokenFromRange(.String, start_pos, start_line, start_col);
     }
 
     fn readNumber(self: *Lexer) Token {
@@ -142,12 +137,7 @@ pub const Lexer = struct {
                 while (std.mem.indexOfScalar(u8, prefix, self.peek()) != null) {
                     self.advance();
                 }
-                return .{
-                    .type = .Integer,
-                    .text = self.source[start_pos..self.pos],
-                    .line = start_line,
-                    .column = start_col,
-                };
+                return self.tokenFromRange(.Integer, start_pos, start_line, start_col);
             }
         }
 
@@ -195,12 +185,7 @@ pub const Lexer = struct {
             }
         }
 
-        return .{
-            .type = if (is_float) .Float else .Integer,
-            .text = self.source[start_pos..self.pos],
-            .line = start_line,
-            .column = start_col,
-        };
+        return self.tokenFromRange(if (is_float) .Float else .Integer, start_pos, start_line, start_col);
     }
 
     fn readIdentifier(self: *Lexer) Token {
@@ -223,30 +208,15 @@ pub const Lexer = struct {
 
         // Check for boolean literals
         if (std.mem.eql(u8, text, "true") or std.mem.eql(u8, text, "false")) {
-            return .{
-                .type = .Boolean,
-                .text = text,
-                .line = start_line,
-                .column = start_col,
-            };
+            return self.tokenFromText(.Boolean, text, start_line, start_col);
         }
 
         // Check for special float values
         if (std.mem.eql(u8, text, "inf") or std.mem.eql(u8, text, "nan")) {
-            return .{
-                .type = .Float,
-                .text = text,
-                .line = start_line,
-                .column = start_col,
-            };
+            return self.tokenFromText(.Float, text, start_line, start_col);
         }
 
-        return .{
-            .type = .Identifier,
-            .text = text,
-            .line = start_line,
-            .column = start_col,
-        };
+        return self.tokenFromText(.Identifier, text, start_line, start_col);
     }
 
     pub fn nextToken(self: *Lexer) ErrorSet!Token {
@@ -262,12 +232,7 @@ pub const Lexer = struct {
         const col = self.column;
 
         if (self.pos >= self.source.len) {
-            return .{
-                .type = .EOF,
-                .text = "",
-                .line = line,
-                .column = col,
-            };
+            return self.tokenFromText(.EOF, "", line, col);
         }
 
         const c = self.peek();
@@ -277,67 +242,47 @@ pub const Lexer = struct {
             if (self.peekNext(1) == '[') {
                 self.advance();
                 self.advance();
-                return .{
-                    .type = .LeftDoubleBracket,
-                    .text = "[[",
-                    .line = line,
-                    .column = col,
-                };
+                return self.tokenFromText(.LeftDoubleBracket, "[[", line, col);
             }
             self.advance();
-            return .{
-                .type = .LeftBracket,
-                .text = "[",
-                .line = line,
-                .column = col,
-            };
+            return self.tokenFromText(.LeftBracket, "[", line, col);
         }
 
         if (c == ']') {
             if (self.peekNext(1) == ']') {
                 self.advance();
                 self.advance();
-                return .{
-                    .type = .RightDoubleBracket,
-                    .text = "]][",
-                    .line = line,
-                    .column = col,
-                };
+                return self.tokenFromText(.RightDoubleBracket, "]]", line, col);
             }
             self.advance();
-            return .{
-                .type = .RightBracket,
-                .text = "]",
-                .line = line,
-                .column = col,
-            };
+            return self.tokenFromText(.RightBracket, "]", line, col);
         }
 
         // Single character tokens
         switch (c) {
             '{' => {
                 self.advance();
-                return .{ .type = .LeftBrace, .text = "{", .line = line, .column = col };
+                return self.tokenFromText(.LeftBrace, "{", line, col);
             },
             '}' => {
                 self.advance();
-                return .{ .type = .RightBrace, .text = "}", .line = line, .column = col };
+                return self.tokenFromText(.RightBrace, "}", line, col);
             },
             '=' => {
                 self.advance();
-                return .{ .type = .Equal, .text = "=", .line = line, .column = col };
+                return self.tokenFromText(.Equal, "=", line, col);
             },
             ',' => {
                 self.advance();
-                return .{ .type = .Comma, .text = ",", .line = line, .column = col };
+                return self.tokenFromText(.Comma, ",", line, col);
             },
             '.' => {
                 self.advance();
-                return .{ .type = .Dot, .text = ".", .line = line, .column = col };
+                return self.tokenFromText(.Dot, ".", line, col);
             },
             '\n' => {
                 self.advance();
-                return .{ .type = .NewLine, .text = "\n", .line = line, .column = col };
+                return self.tokenFromText(.NewLine, "\n", line, col);
             },
             '"', '\'' => {
                 return try self.readString(c);
@@ -352,6 +297,24 @@ pub const Lexer = struct {
                 return ErrorSet.InvalidSyntax;
             },
         }
+    }
+
+    fn tokenFromRange(self: *const Lexer, token_type: TokenType, start_pos: usize, line: usize, column: usize) Token {
+        return .{
+            .type = token_type,
+            .text = self.source[start_pos..self.pos],
+            .line = line,
+            .column = column,
+        };
+    }
+
+    fn tokenFromText(_: *const Lexer, token_type: TokenType, text: []const u8, line: usize, column: usize) Token {
+        return .{
+            .type = token_type,
+            .text = text,
+            .line = line,
+            .column = column,
+        };
     }
 };
 

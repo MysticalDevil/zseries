@@ -74,7 +74,7 @@ pub const Value = union(enum) {
                 }
                 map.deinit();
             },
-            else => {},
+            else => return,
         }
     }
 
