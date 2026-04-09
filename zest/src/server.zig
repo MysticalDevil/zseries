@@ -43,18 +43,19 @@ pub const Server = struct {
     }
 
     pub fn listen(self: *Server, address: net.IpAddress) !void {
-        self.server_socket = try net.IpAddress.listen(address, self.io, .{});
+        self.server_socket = try net.IpAddress.listen(&address, self.io, .{});
         self.running.store(true, .seq_cst);
 
         std.log.info("zest server listening on {any}", .{address});
 
         while (self.running.load(.seq_cst)) {
-            const socket = if (self.server_socket) |server_socket|
+            const socket = if (self.server_socket) |*server_socket|
                 server_socket
             else
                 break;
             const conn = socket.accept(self.io) catch |err| switch (err) {
                 error.SocketNotListening => break,
+                error.Canceled => break,
                 else => {
                     std.log.err("accept error: {any}", .{err});
                     continue;
@@ -79,7 +80,6 @@ pub const Server = struct {
         while (true) {
             var request = http_server.receiveHead() catch |err| switch (err) {
                 error.HttpConnectionClosing => return,
-                error.EndOfStream => return,
                 else => {
                     std.log.err("http receive error: {any}", .{err});
                     return;
@@ -98,8 +98,8 @@ pub const Server = struct {
         const target = request.head.target;
         const method = request.head.method;
 
-        var params_buf = std.ArrayList(router.PathParams.Item).init(self.allocator);
-        defer params_buf.deinit();
+        var params_buf = std.ArrayList(router.PathParams.Item).empty;
+        defer params_buf.deinit(self.allocator);
 
         const match_result = try self.router.get(target, &params_buf);
 
@@ -112,14 +112,39 @@ pub const Server = struct {
         );
         defer ctx.deinit();
 
+        try populateRequestContext(self, request, &ctx);
+
         if (match_result) |match| {
             try self.middleware.execute(&ctx, match.route.handler);
         } else {
-            try ctx.status(404);
+            ctx.status(404);
             try ctx.text(404, "Not Found");
         }
 
         try self.sendResponse(request, &ctx);
+    }
+
+    fn populateRequestContext(self: *Server, request: *http.Server.Request, ctx: *Context) !void {
+        var headers = request.iterateHeaders();
+        while (headers.next()) |header| {
+            try ctx.headers.put(
+                try self.allocator.dupe(u8, header.name),
+                try self.allocator.dupe(u8, header.value),
+            );
+        }
+
+        if (!request.head.method.requestHasBody()) return;
+
+        var read_buffer: [512]u8 = undefined;
+        const reader = try request.readerExpectContinue(&read_buffer);
+        var body_writer: std.Io.Writer.Allocating = .init(self.allocator);
+        errdefer body_writer.deinit();
+        const streamed_len = reader.streamRemaining(&body_writer.writer) catch |err| switch (err) {
+            error.ReadFailed => return err,
+            else => |e| return e,
+        };
+        std.debug.assert(streamed_len == body_writer.writer.end);
+        ctx.request_body = try body_writer.toOwnedSlice();
     }
 
     fn sendResponse(_: *Server, request: *http.Server.Request, ctx: *Context) !void {

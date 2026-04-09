@@ -12,23 +12,23 @@ pub const Middleware = struct {
 
     pub fn init(allocator: std.mem.Allocator) Middleware {
         return .{
-            .before_hooks = std.ArrayList(BeforeHook).init(allocator),
-            .after_hooks = std.ArrayList(AfterHook).init(allocator),
+            .before_hooks = .empty,
+            .after_hooks = .empty,
             .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *Middleware) void {
-        self.before_hooks.deinit();
-        self.after_hooks.deinit();
+        self.before_hooks.deinit(self.allocator);
+        self.after_hooks.deinit(self.allocator);
     }
 
     pub fn before(self: *Middleware, hook: BeforeHook) !void {
-        try self.before_hooks.append(hook);
+        try self.before_hooks.append(self.allocator, hook);
     }
 
     pub fn after(self: *Middleware, hook: AfterHook) !void {
-        try self.after_hooks.append(hook);
+        try self.after_hooks.append(self.allocator, hook);
     }
 
     pub fn execute(self: *Middleware, ctx: *Context, handler: Handler) !void {
