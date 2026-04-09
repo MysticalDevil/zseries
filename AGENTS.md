@@ -8,7 +8,10 @@ This repository is a Zig monorepo. Top-level directories such as `zcli/`,
 project's `src/`; tests are usually inline `test` blocks or package-local test
 files such as `zjwt/tests/basic.zig`. Shared documentation sits in package
 `README.md` files and focused docs folders like `zlint/docs/` and
-`ztotp/docs/`.
+`ztotp/docs/`. The root-level
+[`docs/zig-std-quick-reference.md`](docs/zig-std-quick-reference.md) file is a
+guidance/overview document for Zig standard-library orientation, not a
+repository policy or source of truth.
 
 ## Build, Test, and Development Commands
 
