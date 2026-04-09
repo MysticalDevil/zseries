@@ -1,0 +1,4 @@
+# Redirect handling
+
+# @name redirect_request
+GET {{baseUrl}}/redirect

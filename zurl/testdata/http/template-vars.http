@@ -1,0 +1,7 @@
+@scheme = http
+@host = {{host_and_port}}
+@base = {{scheme}}://{{host}}
+
+# @name templated
+GET {{base}}/health
+X-Auth: {{$env ZURL_TOKEN}}

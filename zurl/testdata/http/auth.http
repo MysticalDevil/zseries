@@ -1,0 +1,41 @@
+# Authentication flow
+
+# @name login_success
+POST {{baseUrl}}/session/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### invalid password
+# @name login_invalid
+POST {{baseUrl}}/session/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "wrongpassword"
+}
+
+### missing password
+# @name login_missing_password
+POST {{baseUrl}}/session/login
+Content-Type: application/json
+
+{
+  "username": "{{username}}"
+}
+
+### current user
+# @name current_user
+GET {{baseUrl}}/session/me
+
+### logout
+# @name logout
+POST {{baseUrl}}/session/logout
+
+### current user after logout
+# @name current_user_after_logout
+GET {{baseUrl}}/session/me

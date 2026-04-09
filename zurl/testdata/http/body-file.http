@@ -1,0 +1,18 @@
+@loginPath = /session/login
+
+# @name login
+POST {{baseUrl}}{{loginPath}}
+Content-Type: application/json
+
+{
+  "username": "{{username}}",
+  "password": "{{password}}"
+}
+
+### echo file body
+# @name echo_file
+POST {{baseUrl}}/echo
+Content-Type: application/json
+Authorization: Bearer {{$env ZURL_TOKEN}}
+
+< ./payloads/echo.json
