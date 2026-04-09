@@ -3,19 +3,16 @@ const color = @import("color.zig");
 
 pub const JsonOptions = struct {
     use_color: bool = false,
-    indent: ?[]const u8 = "  ",
+    stringify: std.json.Stringify.Options = .{ .whitespace = .indent_2 },
 };
 
 pub fn writeJson(writer: *std.Io.Writer, value: anytype, options: JsonOptions) !void {
-    const fmt_options: std.json.StringifyOptions = .{
-        .whitespace = if (options.indent) |indent| .{ .indent_level = 1, .indent = indent } else null,
-    };
     if (options.use_color) {
         try writer.writeAll("\x1b[36m");
-        try std.json.stringify(value, fmt_options, writer);
+        try std.json.Stringify.value(value, options.stringify, writer);
         try writer.writeAll("\x1b[0m");
     } else {
-        try std.json.stringify(value, fmt_options, writer);
+        try std.json.Stringify.value(value, options.stringify, writer);
     }
 }
 
@@ -95,4 +92,27 @@ test "writeJson produces valid JSON" {
     defer testing.allocator.free(text);
     try testing.expect(std.mem.indexOf(u8, text, "\"name\"") != null);
     try testing.expect(std.mem.indexOf(u8, text, "\"test\"") != null);
+}
+
+test "writeJson respects Zig 0.16 indentation options" {
+    const testing = std.testing;
+    var out: std.Io.Writer.Allocating = .init(testing.allocator);
+    defer out.deinit();
+
+    const data = .{ .name = "test", .value = 42 };
+    try writeJson(&out.writer, data, .{ .stringify = .{ .whitespace = .indent_2 } });
+
+    const text = try out.toOwnedSlice();
+    defer testing.allocator.free(text);
+    try testing.expectEqualStrings(
+        "{\n  \"name\": \"test\",\n  \"value\": 42\n}",
+        text,
+    );
+}
+
+test "writeJson can emit minified JSON" {
+    const testing = std.testing;
+    const text = try writeJsonToAlloc(testing.allocator, .{ .ok = true }, .{ .stringify = .{ .whitespace = .minified } });
+    defer testing.allocator.free(text);
+    try testing.expectEqualStrings("{\"ok\":true}", text);
 }
