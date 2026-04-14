@@ -2,7 +2,7 @@
     .name = .ztotp,
     .version = "0.0.0",
     .fingerprint = 0xc9c0796b2190e839,
-    .minimum_zig_version = "0.16.0-dev.3061+9b1eaad13",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zcli = .{ .path = "../zcli" },
         .ztui = .{ .path = "../ztui" },

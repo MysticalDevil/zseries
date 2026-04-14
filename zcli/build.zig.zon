@@ -2,7 +2,7 @@
     .name = .zcli,
     .version = "0.0.0",
     .fingerprint = 0x927117ca13b27141,
-    .minimum_zig_version = "0.16.0-dev.3061+9b1eaad13",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",

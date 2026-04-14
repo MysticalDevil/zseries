@@ -252,7 +252,6 @@ fn serveApp(app: *zest.App, address: std.Io.net.IpAddress) std.Io.Cancelable!voi
     app.listen(address) catch |err| {
         std.debug.panic("test server listen failed: {t}", .{err});
     };
-    _ = address;
 }
 
 fn pickPort(io: std.Io) !u16 {

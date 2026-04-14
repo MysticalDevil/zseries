@@ -2,7 +2,7 @@
     .name = .ztoml,
     .version = "0.1.0",
     .fingerprint = 0x46c18c3c00cb91e6,
-    .minimum_zig_version = "0.16.0-dev",
+    .minimum_zig_version = "0.16.0",
     .dependencies = .{},
     .paths = .{
         "build.zig",

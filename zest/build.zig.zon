@@ -2,7 +2,7 @@
     .name = .zest,
     .version = "0.0.0",
     .fingerprint = 0x38a0093fd709c78c,
-    .minimum_zig_version = "0.16.0-dev.3121+d34b868bc",
+    .minimum_zig_version = "0.16.0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
