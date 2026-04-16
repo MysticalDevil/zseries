@@ -1,6 +1,10 @@
 const std = @import("std");
+const http = std.http;
 const Context = @import("context.zig").Context;
-const Handler = @import("middleware.zig").Handler;
+const middleware = @import("middleware.zig");
+const Handler = middleware.Handler;
+const BeforeHook = middleware.BeforeHook;
+const AfterHook = middleware.AfterHook;
 
 pub const PathParams = struct {
     items: []Item,
@@ -25,7 +29,34 @@ pub const PathParams = struct {
 
 pub const Route = struct {
     path: []const u8,
+    method: http.Method,
     handler: Handler,
+    before_hooks: std.ArrayList(BeforeHook),
+    after_hooks: std.ArrayList(AfterHook),
+
+    pub fn init(allocator: std.mem.Allocator, path: []const u8, method: http.Method, handler: Handler) !Route {
+        return .{
+            .path = try allocator.dupe(u8, path),
+            .method = method,
+            .handler = handler,
+            .before_hooks = .empty,
+            .after_hooks = .empty,
+        };
+    }
+
+    pub fn deinit(self: *Route, allocator: std.mem.Allocator) void {
+        allocator.free(self.path);
+        self.before_hooks.deinit(allocator);
+        self.after_hooks.deinit(allocator);
+    }
+
+    pub fn before(self: *Route, allocator: std.mem.Allocator, hook: BeforeHook) !void {
+        try self.before_hooks.append(allocator, hook);
+    }
+
+    pub fn after(self: *Route, allocator: std.mem.Allocator, hook: AfterHook) !void {
+        try self.after_hooks.append(allocator, hook);
+    }
 };
 
 pub const MatchResult = struct {
@@ -45,23 +76,23 @@ pub const Router = struct {
     }
 
     pub fn deinit(self: *Router) void {
-        for (self.routes.items) |route| {
-            self.allocator.free(route.path);
+        for (self.routes.items) |*route| {
+            route.deinit(self.allocator);
         }
         self.routes.deinit(self.allocator);
     }
 
-    pub fn add(self: *Router, path: []const u8, handler: Handler) !void {
-        try self.routes.append(self.allocator, .{
-            .path = try self.allocator.dupe(u8, path),
-            .handler = handler,
-        });
+    pub fn add(self: *Router, path: []const u8, method: http.Method, handler: Handler) !*Route {
+        const route = try Route.init(self.allocator, path, method, handler);
+        try self.routes.append(self.allocator, route);
+        return &self.routes.items[self.routes.items.len - 1];
     }
 
-    pub fn get(self: *Router, target: []const u8, params: *std.ArrayList(PathParams.Item)) !?MatchResult {
+    pub fn match(self: *Router, target: []const u8, method: http.Method, params: *std.ArrayList(PathParams.Item)) !?MatchResult {
         const path = stripQuery(target);
         for (self.routes.items) |*route| {
             params.clearRetainingCapacity();
+            if (route.method != method) continue;
             if (matchRoute(self.allocator, route.path, path, params)) {
                 return .{
                     .route = route,
@@ -117,20 +148,22 @@ test "radix tree basic matching" {
         fn h(_: *Context) !void {}
     }.h;
 
-    try router.add("/users/:id", handler);
-    try router.add("/users/:id/posts/:postId", handler);
+    const r1 = try router.add("/users/:id", .GET, handler);
+    _ = r1;
+    const r2 = try router.add("/users/:id/posts/:postId", .GET, handler);
+    _ = r2;
 
     var params = std.ArrayList(PathParams.Item).empty;
     defer params.deinit(allocator);
 
-    const match1 = try router.get("/users/123", &params);
+    const match1 = try router.match("/users/123", .GET, &params);
     try testing.expect(match1 != null);
     const m1 = match1 orelse return error.TestUnexpectedResult;
     const id1 = m1.params.get("id") orelse return error.TestUnexpectedResult;
     try testing.expectEqualStrings("123", id1);
 
     params.clearRetainingCapacity();
-    const match2 = try router.get("/users/456/posts/789", &params);
+    const match2 = try router.match("/users/456/posts/789", .GET, &params);
     try testing.expect(match2 != null);
     const m2 = match2 orelse return error.TestUnexpectedResult;
     const id2 = m2.params.get("id") orelse return error.TestUnexpectedResult;
@@ -148,14 +181,45 @@ test "radix tree param int parsing" {
         fn h(_: *Context) !void {}
     }.h;
 
-    try router.add("/items/:id", handler);
+    const r = try router.add("/items/:id", .GET, handler);
+    _ = r;
 
     var params = std.ArrayList(PathParams.Item).empty;
     defer params.deinit(allocator);
 
-    const match = try router.get("/items/42", &params);
+    const match = try router.match("/items/42", .GET, &params);
     try testing.expect(match != null);
     const m = match orelse return error.TestUnexpectedResult;
     const id = m.params.getInt("id", u32) orelse return error.TestUnexpectedResult;
     try testing.expectEqual(@as(u32, 42), id);
+}
+
+test "router discriminates by method" {
+    const allocator = testing.allocator;
+    var router = try Router.init(allocator);
+    defer router.deinit();
+
+    const get_handler = struct {
+        fn h(_: *Context) !void {}
+    }.h;
+    const post_handler = struct {
+        fn h(_: *Context) !void {}
+    }.h;
+
+    const r1 = try router.add("/items", .GET, get_handler);
+    _ = r1;
+    const r2 = try router.add("/items", .POST, post_handler);
+    _ = r2;
+
+    var params = std.ArrayList(PathParams.Item).empty;
+    defer params.deinit(allocator);
+
+    const get_match = try router.match("/items", .GET, &params);
+    try testing.expect(get_match != null);
+
+    const post_match = try router.match("/items", .POST, &params);
+    try testing.expect(post_match != null);
+
+    const delete_match = try router.match("/items", .DELETE, &params);
+    try testing.expect(delete_match == null);
 }

@@ -1,5 +1,6 @@
 const std = @import("std");
 const Context = @import("context.zig").Context;
+const Route = @import("router.zig").Route;
 
 pub const Handler = *const fn (*Context) anyerror!void;
 pub const BeforeHook = *const fn (*Context) anyerror!void;
@@ -31,12 +32,24 @@ pub const Middleware = struct {
         try self.after_hooks.append(self.allocator, hook);
     }
 
-    pub fn execute(self: *Middleware, ctx: *Context, handler: Handler) !void {
+    pub fn execute(self: *Middleware, ctx: *Context, route: ?*const Route, handler: Handler) !void {
         for (self.before_hooks.items) |hook| {
             try hook(ctx);
         }
 
+        if (route) |r| {
+            for (r.before_hooks.items) |hook| {
+                try hook(ctx);
+            }
+        }
+
         try handler(ctx);
+
+        if (route) |r| {
+            for (r.after_hooks.items) |hook| {
+                try hook(ctx);
+            }
+        }
 
         for (self.after_hooks.items) |hook| {
             try hook(ctx);

@@ -111,8 +111,7 @@ pub const Context = struct {
         try self.response_body.appendSlice(self.allocator, content);
     }
 
-    pub fn json(self: *Context, code: u16, value: anytype) !void {
-        self.response_status = @enumFromInt(code);
+    fn jsonResponse(self: *Context, value: anytype) !void {
         try self.setHeader("Content-Type", "application/json");
         var writer: std.Io.Writer.Allocating = .init(self.allocator);
         defer writer.deinit();
@@ -120,13 +119,14 @@ pub const Context = struct {
         try self.response_body.appendSlice(self.allocator, writer.writer.buffered());
     }
 
+    pub fn json(self: *Context, code: u16, value: anytype) !void {
+        self.response_status = @enumFromInt(code);
+        try self.jsonResponse(value);
+    }
+
     pub fn jsonStatus(self: *Context, status_code: Status, value: anytype) !void {
         self.response_status = status_code;
-        try self.setHeader("Content-Type", "application/json");
-        var writer: std.Io.Writer.Allocating = .init(self.allocator);
-        defer writer.deinit();
-        try std.json.Stringify.value(value, .{}, &writer.writer);
-        try self.response_body.appendSlice(self.allocator, writer.writer.buffered());
+        try self.jsonResponse(value);
     }
 
     pub fn html(self: *Context, code: u16, content: []const u8) !void {

@@ -16,7 +16,8 @@ test "app creates server" {
         }
     }.h;
 
-    try app.get("/hello", handler);
+    const builder = try app.get("/hello", handler);
+    _ = builder;
 }
 
 test "router matches exact paths" {
@@ -29,12 +30,13 @@ test "router matches exact paths" {
         fn h(_: *anyopaque) !void {}
     }.h;
 
-    try router.add("/api/users", handler);
+    const r = try router.add("/api/users", .GET, handler);
+    _ = r;
 
     var params = std.ArrayList(zest.PathParams.Item).init(allocator);
     defer params.deinit();
 
-    const match = try router.get("/api/users", &params);
+    const match = try router.match("/api/users", .GET, &params);
     try testing.expect(match != null);
 }
 
@@ -115,7 +117,113 @@ test "middleware executes hooks" {
         fn h(_: *zest.Context) !void {}
     }.h;
 
-    try mw.execute(&ctx, handler);
+    try mw.execute(&ctx, null, handler);
+}
+
+test "per-route middleware executes hooks" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const allocator = testing.allocator;
+
+    var mw = zest.middleware.Middleware.init(allocator);
+    defer mw.deinit();
+
+    const global_before = struct {
+        fn h(ctx: *zest.Context) !void {
+            try ctx.setHeader("X-Global", "1");
+        }
+    }.h;
+
+    const route_before = struct {
+        fn h(ctx: *zest.Context) !void {
+            try ctx.setHeader("X-Route", "1");
+        }
+    }.h;
+
+    try mw.before(global_before);
+
+    var route = try zest.Route.init(allocator, "/test", .GET, struct {
+        fn h(_: *zest.Context) !void {}
+    }.h);
+    defer route.deinit(allocator);
+    try route.before(allocator, route_before);
+
+    var ctx = try zest.Context.init(allocator, io, .GET, "/test", .{ .items = &.{} });
+    defer ctx.deinit();
+
+    try mw.execute(&ctx, &route, route.handler);
+    try testing.expect(std.mem.eql(u8, ctx.response_headers.get("X-Global").?, "1"));
+    try testing.expect(std.mem.eql(u8, ctx.response_headers.get("X-Route").?, "1"));
+}
+
+test "route builder chaining" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const allocator = testing.allocator;
+
+    var app = try zest.App.init(allocator, io);
+    defer app.deinit();
+
+    const hook = struct {
+        fn h(ctx: *zest.Context) !void {
+            try ctx.setHeader("X-Test", "ok");
+        }
+    }.h;
+
+    const handler = struct {
+        fn h(_: *zest.Context) !void {}
+    }.h;
+
+    const builder = try app.get("/chain", handler);
+    const chained = try builder.before(hook);
+    _ = chained;
+}
+
+test "group registers prefixed routes" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const allocator = testing.allocator;
+
+    var app = try zest.App.init(allocator, io);
+    defer app.deinit();
+
+    const handler = struct {
+        fn h(_: *zest.Context) !void {}
+    }.h;
+
+    var api = try app.group("/api");
+    defer api.deinit();
+
+    const builder = try api.get("/users", handler);
+    _ = builder;
+
+    var params = std.ArrayList(zest.PathParams.Item).empty;
+    defer params.deinit(allocator);
+
+    const match = try app.server.router.match("/api/users", .GET, &params);
+    try testing.expect(match != null);
+}
+
+test "group middleware attached to routes" {
+    const io = std.Io.Threaded.global_single_threaded.io();
+    const allocator = testing.allocator;
+
+    var app = try zest.App.init(allocator, io);
+    defer app.deinit();
+
+    const group_hook = struct {
+        fn h(ctx: *zest.Context) !void {
+            try ctx.setHeader("X-Group", "yes");
+        }
+    }.h;
+
+    const handler = struct {
+        fn h(_: *zest.Context) !void {}
+    }.h;
+
+    var api = try app.group("/api");
+    defer api.deinit();
+    try api.before(group_hook);
+
+    const builder = try api.get("/items", handler);
+    try testing.expectEqual(@as(usize, 1), builder.route.before_hooks.items.len);
 }
 
 test "status enum values" {

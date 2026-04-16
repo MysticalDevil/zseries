@@ -8,7 +8,7 @@ socket without pulling in a larger framework.
 
 - Maintained inside the `zseries` monorepo
 - Intended for local/monorepo consumption today
-- No `build.zig.zon` yet, so treat it as a vendored/local dependency for now
+- Has a `build.zig.zon` for Zig package manager consumption
 
 ## Build And Test
 
@@ -46,12 +46,47 @@ fn healthHandler(ctx: *zest.Context) !void {
 }
 ```
 
+## Per-Route Middleware
+
+```zig
+const authHook = struct {
+    fn h(ctx: *zest.Context) !void {
+        if (ctx.header("Authorization") == null) {
+            try ctx.jsonStatus(zest.Status.unauthorized, .{ .error = "missing auth" });
+            return error.Unauthorized;
+        }
+    }
+}.h;
+
+_ = try app.get("/admin", adminHandler).before(authHook);
+```
+
+## Route Groups
+
+```zig
+var api = try app.group("/api");
+defer api.deinit();
+
+try api.before(authHook);
+_ = try api.get("/users/:id", getUserHandler);
+_ = try api.post("/users", createUserHandler);
+```
+
+## Error Recovery
+
+If a handler panics or returns an error, `zest` automatically responds with
+`500 Internal Server Error` and keeps the server running instead of crashing
+the connection loop.
+
 For a fuller example with hooks and logging, see
 [`examples/basic.zig`](examples/basic.zig).
 
 ## Public Surface
 
-- `App`: route registration, hook registration, and server startup
+- `App`: route registration, global hook registration, and server startup
+- `Group`: prefix-based route grouping with group-level hooks
+- `RouteBuilder`: fluent API for per-route `.before()` / `.after()` middleware
+- `Route`: a registered route with method, path, handler, and hooks
 - `Context`: request/response state passed into handlers
 - `Server`: lower-level server primitive
 - `Router` and `PathParams`: route matching and parameter extraction

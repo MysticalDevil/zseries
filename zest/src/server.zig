@@ -101,7 +101,7 @@ pub const Server = struct {
         var params_buf = std.ArrayList(router.PathParams.Item).empty;
         defer params_buf.deinit(self.allocator);
 
-        const match_result = try self.router.get(target, &params_buf);
+        const match_result = try self.router.match(target, method, &params_buf);
 
         var ctx = try Context.init(
             self.allocator,
@@ -115,7 +115,11 @@ pub const Server = struct {
         try populateRequestContext(self, request, &ctx);
 
         if (match_result) |match| {
-            try self.middleware.execute(&ctx, match.route.handler);
+            self.middleware.execute(&ctx, match.route, match.route.handler) catch |err| {
+                std.log.err("request handler error: {any}", .{err});
+                ctx.status(500);
+                ctx.text(500, "Internal Server Error") catch {};
+            };
         } else {
             ctx.status(404);
             try ctx.text(404, "Not Found");

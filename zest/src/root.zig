@@ -1,14 +1,24 @@
 const std = @import("std");
 
-pub const App = @import("app.zig").App;
+const app = @import("app.zig");
+pub const App = app.App;
+pub const Group = app.Group;
+pub const RouteBuilder = app.RouteBuilder;
+
 pub const Context = @import("context.zig").Context;
 pub const Server = @import("server.zig").Server;
-pub const Router = @import("router.zig").Router;
-pub const PathParams = @import("router.zig").PathParams;
+
+const router = @import("router.zig");
+pub const Router = router.Router;
+pub const Route = router.Route;
+pub const PathParams = router.PathParams;
+
 pub const Status = std.http.Status;
-pub const middleware = @import("middleware.zig");
-pub const Handler = middleware.Handler;
-pub const BeforeHook = middleware.BeforeHook;
-pub const AfterHook = middleware.AfterHook;
+
+const mw = @import("middleware.zig");
+pub const middleware = mw;
+pub const Handler = mw.Handler;
+pub const BeforeHook = mw.BeforeHook;
+pub const AfterHook = mw.AfterHook;
 
 pub const version = "0.1.0";

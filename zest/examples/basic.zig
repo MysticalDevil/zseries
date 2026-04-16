@@ -48,10 +48,39 @@ pub fn main() !void {
     afterHook.log = &logger;
     try app.after(afterHook);
 
-    try app.get("/", indexHandler);
-    try app.get("/health", healthHandler);
-    try app.get("/users/:id", getUserHandler);
-    try app.post("/users", createUserHandler);
+    const index = try app.get("/", indexHandler);
+    _ = index;
+    const health = try app.get("/health", healthHandler);
+    _ = health;
+
+    // API group with its own prefix and hooks
+    var api = try app.group("/api");
+    defer api.deinit();
+
+    const apiAuthHook = struct {
+        fn hook(ctx: *zest.Context) !void {
+            // Stub authentication check for the API group
+            if (ctx.header("Authorization") == null) {
+                try ctx.jsonStatus(zest.Status.unauthorized, .{ .@"error" = "missing auth" });
+                return error.Unauthorized;
+            }
+        }
+    }.hook;
+    try api.before(apiAuthHook);
+
+    const user_builder = try api.get("/users/:id", getUserHandler);
+    _ = user_builder;
+    const create_builder = try api.post("/users", createUserHandler);
+    _ = create_builder;
+
+    // Per-route middleware example: add a custom header on a single route
+    const admin_builder = try api.get("/admin", adminHandler);
+    const admin_with_hook = try admin_builder.after(struct {
+        fn hook(ctx: *zest.Context) !void {
+            try ctx.setHeader("X-Admin-Route", "true");
+        }
+    }.hook);
+    _ = admin_with_hook;
 
     const addr = std.Io.net.Ip4Address.loopback(8080);
     try app.listen(addr);
@@ -116,4 +145,8 @@ fn createUserHandler(ctx: *zest.Context) !void {
         .name = user.name,
         .email = user.email,
     });
+}
+
+fn adminHandler(ctx: *zest.Context) !void {
+    try ctx.jsonStatus(zest.Status.ok, .{ .admin = true });
 }
