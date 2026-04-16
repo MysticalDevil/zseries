@@ -1,0 +1,15 @@
+# Build artifacts
+.zig-cache/
+zig-out/
+
+# Database
+*.db
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Vite build output
+frontend/dist/

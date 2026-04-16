@@ -1,0 +1,17 @@
+.{
+    .name = .memos_backend,
+    .version = "0.0.0",
+    .fingerprint = 0x1a576b0da8f756d2,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .zest = .{ .path = "../../../zest" },
+        .zjwt = .{ .path = "../../../zjwt" },
+        .zlog = .{ .path = "../../../zlog" },
+        .zcors = .{ .path = "../../../zcors" },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
