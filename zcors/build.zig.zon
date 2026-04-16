@@ -1,0 +1,11 @@
+.{
+    .name = .zcors,
+    .version = "0.0.0",
+    .fingerprint = 0xcb5de071b8c2be3a,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "src",
+        "README.md",
+    },
+}
