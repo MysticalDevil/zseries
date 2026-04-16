@@ -3,12 +3,13 @@
 ## Project Structure & Module Organization
 
 This repository is a Zig monorepo. Top-level directories such as `zcli/`,
-`zlint/`, `zlog/`, `ztoml/`, `ztui/`, `ztmpfile/`, `ztotp/`, `zest/`, and
-`zjwt/` are independent packages or tools. Most code lives under each
-project's `src/`; tests are usually inline `test` blocks or package-local test
-files such as `zjwt/tests/basic.zig`. Shared documentation sits in package
-`README.md` files and focused docs folders like `zlint/docs/` and
-`ztotp/docs/`. The root-level
+`zlint/`, `zlog/`, `zcors/`, `ztoml/`, `ztui/`, `ztmpfile/`, `ztotp/`, `zest/`, and
+`zjwt/` are independent packages or tools. The `examples/` directory contains
+full-stack or integration examples such as `examples/memos/`. Most code lives
+under each project's `src/`; tests are usually inline `test` blocks or
+package-local test files such as `zjwt/tests/basic.zig`. Shared documentation
+sits in package `README.md` files and focused docs folders like `zlint/docs/`
+and `ztotp/docs/`. The root-level
 [`docs/zig-std-quick-reference.md`](docs/zig-std-quick-reference.md) file is a
 guidance/overview document for Zig standard-library orientation, not a
 repository policy or source of truth.

@@ -17,12 +17,19 @@ For third-party projects, vendor the library directory you want to consume and d
 | [zest](zest/) | Library | Lightweight HTTP primitives for apps, routing, and middleware |
 | [zjwt](zjwt/) | Library | JWT encode/verify helpers, claims, keys, and middleware adapters |
 | [zlint](zlint/) | Tool | Zig linter for repository and package quality rules |
+| [zcors](zcors/) | Library | Standalone CORS middleware with comptime duck-typing hooks |
 | [ztotp](ztotp/) | Application | Local-first encrypted TOTP CLI with TUI dashboard |
 | [zcli](zcli/) | Library | CLI styling and help-formatting primitives |
 | [ztui](ztui/) | Library | TUI buffer, terminal, and widget primitives |
 | [zlog](zlog/) | Library | Structured logging with levels and multiple sinks |
 | [ztmpfile](ztmpfile/) | Library | Cross-platform temp file/dir with C ABI support |
 | [ztoml](ztoml/) | Library | TOML parsing library with DOM-style API |
+
+### Examples
+
+| Project | Stack | Description |
+| ------- | ----- | ----------- |
+| [memos](examples/memos/) | Zig + SQLite + Vite | Full-stack JWT auth, CRUD memos, CORS, request logging |
 
 ## Quick Links
 
