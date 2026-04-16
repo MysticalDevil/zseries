@@ -1,0 +1,12 @@
+.{
+    .name = .zjwt,
+    .version = "0.0.0",
+    .fingerprint = 0x57908b06c9368b4a,
+    .minimum_zig_version = "0.16.0",
+    .paths = .{
+        "build.zig",
+        "src",
+        "tests",
+        "README.md",
+    },
+}

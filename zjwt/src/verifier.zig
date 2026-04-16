@@ -1,4 +1,5 @@
 const std = @import("std");
+const time = @import("time.zig");
 const algorithm_zig = @import("algorithm.zig");
 const claims_zig = @import("claims.zig");
 const token_zig = @import("token.zig");
@@ -16,6 +17,7 @@ pub const Verifier = struct {
     algorithm: Algorithm,
     key: Key,
     options: VerifyOptions,
+    io: std.Io,
 
     pub const VerifyOptions = struct {
         clock_skew: i64 = 60,
@@ -25,12 +27,13 @@ pub const Verifier = struct {
         sliding_window: i64 = 300,
     };
 
-    pub fn init(allocator: std.mem.Allocator, algorithm: Algorithm, key: Key, options: VerifyOptions) Verifier {
+    pub fn init(allocator: std.mem.Allocator, algorithm: Algorithm, key: Key, options: VerifyOptions, io: std.Io) Verifier {
         return .{
             .allocator = allocator,
             .algorithm = algorithm,
             .key = key,
             .options = options,
+            .io = io,
         };
     }
 
@@ -45,7 +48,8 @@ pub const Verifier = struct {
         const header_json = try base64UrlDecode(self.allocator, header_b64);
         defer self.allocator.free(header_json);
 
-        const header = try parseHeader(self.allocator, header_json);
+        var header = try parseHeader(self.allocator, header_json);
+        errdefer header.deinit(self.allocator);
 
         if (header.alg != self.algorithm) {
             return error.AlgorithmMismatch;
@@ -55,6 +59,7 @@ pub const Verifier = struct {
         defer self.allocator.free(claims_json);
 
         var claims = try parseClaims(self.allocator, claims_json);
+        errdefer claims.deinit();
 
         const signing_input_len = header_b64.len + 1 + claims_b64.len;
         const signing_input = try self.allocator.alloc(u8, signing_input_len);
@@ -65,14 +70,14 @@ pub const Verifier = struct {
         @memcpy(signing_input[header_b64.len + 1 ..], claims_b64);
 
         const signature = try base64UrlDecode(self.allocator, signature_b64);
-        defer self.allocator.free(signature);
+        errdefer self.allocator.free(signature);
 
         const valid = try self.verifySignature(signing_input, signature);
         if (!valid) {
             return error.InvalidSignature;
         }
 
-        const now = std.time.timestamp();
+        const now = time.nowSeconds(self.io);
         try claims.validate(now, .{
             .clock_skew = self.options.clock_skew,
             .issuer = self.options.issuer,
@@ -88,7 +93,7 @@ pub const Verifier = struct {
                     if (claims.iat) |iat| {
                         claims.exp = now + (exp - iat);
 
-                        var encoder = Encoder.init(self.allocator, self.algorithm, self.key);
+                        var encoder = Encoder.init(self.allocator, self.algorithm, self.key, self.io);
                         new_token = try encoder.encode(claims);
                     }
                 }
@@ -128,7 +133,7 @@ pub const Verifier = struct {
         var expected: [Hmac.mac_length]u8 = undefined;
         Hmac.create(&expected, data, secret);
 
-        return std.crypto.timing_safe.eql([Hmac.mac_length]u8, expected, signature[0..Hmac.mac_length]);
+        return std.crypto.timing_safe.eql([Hmac.mac_length]u8, expected, signature[0..Hmac.mac_length].*);
     }
 };
 
@@ -141,6 +146,7 @@ pub const VerifiedToken = struct {
     new_token: ?[]const u8,
 
     pub fn deinit(self: *VerifiedToken) void {
+        self.header.deinit(self.allocator);
         self.claims.deinit();
         self.allocator.free(self.signature);
         self.allocator.free(self.raw);
@@ -164,8 +170,12 @@ fn parseHeader(allocator: std.mem.Allocator, json: []const u8) !Header {
 
     return Header{
         .alg = alg,
-        .typ = if (typ) |t| t.string else "JWT",
-        .kid = if (kid) |k| k.string else null,
+        .typ = if (typ) |t| blk: {
+            const s = t.string;
+            if (std.mem.eql(u8, s, "JWT")) break :blk "JWT";
+            break :blk try allocator.dupe(u8, s);
+        } else "JWT",
+        .kid = if (kid) |k| try allocator.dupe(u8, k.string) else null,
     };
 }
 
@@ -197,7 +207,10 @@ fn parseClaims(allocator: std.mem.Allocator, json: []const u8) !Claims {
         {
             continue;
         }
-        try claims.custom.put(key, entry.value_ptr.*);
+        const key_copy = try allocator.dupe(u8, key);
+        errdefer allocator.free(key_copy);
+        const val_copy = try claims_zig.cloneJsonValue(allocator, entry.value_ptr.*);
+        try claims.custom.put(key_copy, val_copy);
     }
 
     return claims;

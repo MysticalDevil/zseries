@@ -25,5 +25,6 @@ pub const middleware = @import("middleware.zig");
 pub const MiddlewareConfig = middleware.MiddlewareConfig;
 pub const TokenSource = middleware.TokenSource;
 pub const Strategy = middleware.Strategy;
+pub const time = @import("time.zig");
 
 pub const version = "0.1.0";

@@ -1,7 +1,12 @@
 const std = @import("std");
 const zjwt = @import("zjwt");
+const time = @import("zjwt").time;
 
 const testing = std.testing;
+
+fn testIo() std.Io {
+    return std.Io.Threaded.global_single_threaded.io();
+}
 
 test "algorithm from string" {
     try testing.expectEqual(zjwt.Algorithm.HS256, zjwt.Algorithm.fromString("HS256").?);
@@ -12,18 +17,19 @@ test "algorithm from string" {
 
 test "encode and verify HS256 token" {
     const allocator = testing.allocator;
+    const io = testIo();
     const secret = "my-super-secret-key";
 
     var claims = zjwt.Claims.init(allocator);
     defer claims.deinit();
 
-    claims.sub = "user123";
-    claims.iss = "test-issuer";
-    claims.exp = std.time.timestamp() + 3600;
-    claims.iat = std.time.timestamp();
+    claims.sub = try allocator.dupe(u8, "user123");
+    claims.iss = try allocator.dupe(u8, "test-issuer");
+    claims.exp = time.nowSeconds(io) + 3600;
+    claims.iat = time.nowSeconds(io);
     try claims.setString("role", "admin");
 
-    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret(secret));
+    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret(secret), io);
     const token = try encoder.encode(claims);
     defer allocator.free(token);
 
@@ -32,7 +38,7 @@ test "encode and verify HS256 token" {
 
     var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret(secret), .{
         .issuer = "test-issuer",
-    });
+    }, io);
 
     var verified = try verifier.verify(token);
     defer verified.deinit();
@@ -44,58 +50,61 @@ test "encode and verify HS256 token" {
 
 test "verify fails with wrong secret" {
     const allocator = testing.allocator;
+    const io = testIo();
 
     var claims = zjwt.Claims.init(allocator);
     defer claims.deinit();
 
-    claims.sub = "user123";
-    claims.exp = std.time.timestamp() + 3600;
+    claims.sub = try allocator.dupe(u8, "user123");
+    claims.exp = time.nowSeconds(io) + 3600;
 
-    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("correct-secret"));
+    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("correct-secret"), io);
     const token = try encoder.encode(claims);
     defer allocator.free(token);
 
-    var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret("wrong-secret"), .{});
+    var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret("wrong-secret"), .{}, io);
     const result = verifier.verify(token);
     try testing.expectError(error.InvalidSignature, result);
 }
 
 test "verify fails with expired token" {
     const allocator = testing.allocator;
+    const io = testIo();
 
     var claims = zjwt.Claims.init(allocator);
     defer claims.deinit();
 
-    claims.sub = "user123";
-    claims.exp = std.time.timestamp() - 10; // 10 seconds ago
+    claims.sub = try allocator.dupe(u8, "user123");
+    claims.exp = time.nowSeconds(io) - 10; // 10 seconds ago
 
-    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"));
+    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"), io);
     const token = try encoder.encode(claims);
     defer allocator.free(token);
 
-    var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"), .{});
+    var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"), .{ .clock_skew = 0 }, io);
     const result = verifier.verify(token);
     try testing.expectError(error.TokenExpired, result);
 }
 
 test "sliding expiration" {
     const allocator = testing.allocator;
+    const io = testIo();
 
     var claims = zjwt.Claims.init(allocator);
     defer claims.deinit();
 
-    claims.sub = "user123";
-    claims.exp = std.time.timestamp() + 100; // 100 seconds from now
-    claims.iat = std.time.timestamp() - 3500; // Issued 1 hour ago
+    claims.sub = try allocator.dupe(u8, "user123");
+    claims.exp = time.nowSeconds(io) + 100; // 100 seconds from now
+    claims.iat = time.nowSeconds(io) - 3500; // Issued 1 hour ago
 
-    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"));
+    var encoder = zjwt.Encoder.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"), io);
     const token = try encoder.encode(claims);
     defer allocator.free(token);
 
     var verifier = zjwt.Verifier.init(allocator, .HS256, zjwt.Key.fromHmacSecret("secret"), .{
         .sliding_expiration = true,
         .sliding_window = 300, // 5 minutes
-    });
+    }, io);
 
     var verified = try verifier.verify(token);
     defer verified.deinit();

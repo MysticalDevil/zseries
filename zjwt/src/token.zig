@@ -7,20 +7,18 @@ pub const Header = struct {
     typ: []const u8 = "JWT",
     kid: ?[]const u8 = null, // Key ID
 
-    pub fn toJson(self: Header, allocator: std.mem.Allocator) ![]const u8 {
-        var map = std.StringHashMap(std.json.Value).init(allocator);
-        defer map.deinit();
-
-        try map.put("alg", .{ .string = self.alg.jwtName() });
-        try map.put("typ", .{ .string = self.typ });
-
-        if (self.kid) |kid| {
-            try map.put("kid", .{ .string = kid });
+    pub fn deinit(self: *Header, allocator: std.mem.Allocator) void {
+        if (!std.mem.eql(u8, self.typ, "JWT")) {
+            allocator.free(self.typ);
         }
+        if (self.kid) |kid| allocator.free(kid);
+    }
 
-        var json = std.ArrayList(u8).init(allocator);
-        try std.json.stringify(map, .{}, json.writer());
-        return json.toOwnedSlice();
+    pub fn toJson(self: Header, allocator: std.mem.Allocator) ![]const u8 {
+        if (self.kid) |kid| {
+            return try std.fmt.allocPrint(allocator, "{{\"alg\":\"{s}\",\"typ\":\"{s}\",\"kid\":\"{s}\"}}", .{ self.alg.jwtName(), self.typ, kid });
+        }
+        return try std.fmt.allocPrint(allocator, "{{\"alg\":\"{s}\",\"typ\":\"{s}\"}}", .{ self.alg.jwtName(), self.typ });
     }
 };
 

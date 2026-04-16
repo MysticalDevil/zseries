@@ -1,4 +1,5 @@
 const std = @import("std");
+const time = @import("time.zig");
 const algorithm_zig = @import("algorithm.zig");
 const claims_zig = @import("claims.zig");
 const token_zig = @import("token.zig");
@@ -14,12 +15,14 @@ pub const Encoder = struct {
     allocator: std.mem.Allocator,
     algorithm: Algorithm,
     key: Key,
+    io: std.Io,
 
-    pub fn init(allocator: std.mem.Allocator, algorithm: Algorithm, key: Key) Encoder {
+    pub fn init(allocator: std.mem.Allocator, algorithm: Algorithm, key: Key, io: std.Io) Encoder {
         return .{
             .allocator = allocator,
             .algorithm = algorithm,
             .key = key,
+            .io = io,
         };
     }
 
@@ -91,49 +94,94 @@ pub const Encoder = struct {
         };
 
         const sig = try allocator.alloc(u8, Hmac.mac_length);
-        Hmac.create(sig, data, secret);
+        Hmac.create(sig[0..Hmac.mac_length], data, secret);
         return sig;
     }
 };
 
 fn claimsToJson(allocator: std.mem.Allocator, claims: Claims) ![]const u8 {
-    var map = std.StringHashMap(std.json.Value).init(allocator);
-    defer map.deinit();
+    var obj: std.json.ObjectMap = .{};
+    defer {
+        var it = obj.iterator();
+        while (it.next()) |entry| {
+            allocator.free(entry.key_ptr.*);
+            claims_zig.freeJsonValue(allocator, entry.value_ptr.*);
+        }
+        obj.deinit(allocator);
+    }
 
-    // Add registered claims
-    if (claims.iss) |iss| try map.put("iss", .{ .string = iss });
-    if (claims.sub) |sub| try map.put("sub", .{ .string = sub });
-    if (claims.aud) |aud| try map.put("aud", .{ .string = aud });
-    if (claims.exp) |exp| try map.put("exp", .{ .integer = exp });
-    if (claims.nbf) |nbf| try map.put("nbf", .{ .integer = nbf });
-    if (claims.iat) |iat| try map.put("iat", .{ .integer = iat });
-    if (claims.jti) |jti| try map.put("jti", .{ .string = jti });
+    // Add registered claims (deep copy values so obj fully owns them)
+    if (claims.iss) |iss| {
+        const k = try allocator.dupe(u8, "iss");
+        errdefer allocator.free(k);
+        const v = try allocator.dupe(u8, iss);
+        try obj.put(allocator, k, .{ .string = v });
+    }
+    if (claims.sub) |sub| {
+        const k = try allocator.dupe(u8, "sub");
+        errdefer allocator.free(k);
+        const v = try allocator.dupe(u8, sub);
+        try obj.put(allocator, k, .{ .string = v });
+    }
+    if (claims.aud) |aud| {
+        const k = try allocator.dupe(u8, "aud");
+        errdefer allocator.free(k);
+        const v = try allocator.dupe(u8, aud);
+        try obj.put(allocator, k, .{ .string = v });
+    }
+    if (claims.exp) |exp| {
+        const k = try allocator.dupe(u8, "exp");
+        errdefer allocator.free(k);
+        try obj.put(allocator, k, .{ .integer = exp });
+    }
+    if (claims.nbf) |nbf| {
+        const k = try allocator.dupe(u8, "nbf");
+        errdefer allocator.free(k);
+        try obj.put(allocator, k, .{ .integer = nbf });
+    }
+    if (claims.iat) |iat| {
+        const k = try allocator.dupe(u8, "iat");
+        errdefer allocator.free(k);
+        try obj.put(allocator, k, .{ .integer = iat });
+    }
+    if (claims.jti) |jti| {
+        const k = try allocator.dupe(u8, "jti");
+        errdefer allocator.free(k);
+        const v = try allocator.dupe(u8, jti);
+        try obj.put(allocator, k, .{ .string = v });
+    }
 
     // Add custom claims
     var iter = claims.custom.iterator();
     while (iter.next()) |entry| {
-        try map.put(entry.key_ptr.*, entry.value_ptr.*);
+        const k = try allocator.dupe(u8, entry.key_ptr.*);
+        errdefer allocator.free(k);
+        const v = try claims_zig.cloneJsonValue(allocator, entry.value_ptr.*);
+        try obj.put(allocator, k, v);
     }
 
-    var json = std.ArrayList(u8).init(allocator);
-    try std.json.stringify(map, .{}, json.writer());
-    return json.toOwnedSlice();
+    const value = std.json.Value{ .object = obj };
+    var writer: std.Io.Writer.Allocating = .init(allocator);
+    defer writer.deinit();
+    try std.json.Stringify.value(value, .{}, &writer.writer);
+    return writer.toOwnedSlice();
 }
 
 const testing = std.testing;
 
 test "encode and verify hmac token" {
     const allocator = testing.allocator;
+    const io = std.Io.Threaded.global_single_threaded.io();
 
     var claims = Claims.init(allocator);
     defer claims.deinit();
 
-    claims.sub = "user123";
-    claims.exp = std.time.timestamp() + 3600;
+    claims.sub = try allocator.dupe(u8, "user123");
+    claims.exp = time.nowSeconds(io) + 3600;
     try claims.setString("role", "admin");
 
     const secret = "my-secret-key";
-    var encoder = Encoder.init(allocator, .HS256, Key.fromHmacSecret(secret));
+    var encoder = Encoder.init(allocator, .HS256, Key.fromHmacSecret(secret), io);
 
     const token = try encoder.encode(claims);
     defer allocator.free(token);
