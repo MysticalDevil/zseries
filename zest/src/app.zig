@@ -42,7 +42,7 @@ pub const Group = struct {
         };
 
         if (group.prefix.len > 1 and std.mem.endsWith(u8, group.prefix, "/")) {
-            group.prefix = std.mem.trimRight(u8, group.prefix, "/");
+            group.prefix = std.mem.trimEnd(u8, group.prefix, "/");
         }
         return group;
     }

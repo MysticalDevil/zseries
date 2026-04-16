@@ -2,6 +2,11 @@ const std = @import("std");
 const zest = @import("zest");
 const zlog = @import("zlog");
 
+fn nowMillis(io: std.Io) i64 {
+    const ts = std.Io.Clock.Timestamp.now(io, .wall);
+    return @divFloor(ts.raw.nanoseconds, std.time.ns_per_ms);
+}
+
 pub fn main() !void {
     const io = std.Io.Threaded.global_single_threaded.io();
     const allocator = std.heap.page_allocator;
@@ -13,10 +18,11 @@ pub fn main() !void {
     var app = try zest.App.init(allocator, io);
     defer app.deinit();
 
-    const beforeHook = struct {
+    const BeforeStruct = struct {
         var log: *zlog.Logger = undefined;
+        var io_val: std.Io = undefined;
         fn hook(ctx: *zest.Context) !void {
-            const start_time = std.time.milliTimestamp();
+            const start_time = nowMillis(io_val);
             const ptr: *anyopaque = @ptrFromInt(@as(usize, @intCast(start_time)));
             try ctx.set("start_time", ptr);
 
@@ -25,17 +31,19 @@ pub fn main() !void {
                 zlog.Field.string("path", ctx.path),
             });
         }
-    }.hook;
-    beforeHook.log = &logger;
-    try app.before(beforeHook);
+    };
+    BeforeStruct.log = &logger;
+    BeforeStruct.io_val = io;
+    try app.before(BeforeStruct.hook);
 
-    const afterHook = struct {
+    const AfterStruct = struct {
         var log: *zlog.Logger = undefined;
+        var io_val: std.Io = undefined;
         fn hook(ctx: *zest.Context) !void {
             const start_ptr = ctx.get("start_time");
             if (start_ptr == null) return;
             const start_time: i64 = @intCast(@intFromPtr(start_ptr.?));
-            const duration = std.time.milliTimestamp() - start_time;
+            const duration = nowMillis(io_val) - start_time;
 
             log.log(.info, "request_completed", &.{
                 zlog.Field.string("method", @tagName(ctx.method)),
@@ -44,9 +52,10 @@ pub fn main() !void {
                 zlog.Field.int("duration_ms", duration),
             });
         }
-    }.hook;
-    afterHook.log = &logger;
-    try app.after(afterHook);
+    };
+    AfterStruct.log = &logger;
+    AfterStruct.io_val = io;
+    try app.after(AfterStruct.hook);
 
     const index = try app.get("/", indexHandler);
     _ = index;
@@ -96,7 +105,7 @@ fn indexHandler(ctx: *zest.Context) !void {
 fn healthHandler(ctx: *zest.Context) !void {
     try ctx.jsonStatus(zest.Status.ok, .{
         .status = "healthy",
-        .timestamp = std.time.milliTimestamp(),
+        .timestamp = std.time.timestamp(),
     });
 }
 

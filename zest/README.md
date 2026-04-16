@@ -93,6 +93,37 @@ For a fuller example with hooks and logging, see
 - `Status`: HTTP status constants
 - `middleware`, `Handler`, `BeforeHook`, `AfterHook`: hook and middleware types
 
+## Third-Party Middleware
+
+Middleware libraries (e.g. authentication, logging, CORS) can integrate with
+`zest` **without importing `zest`**.
+
+```zig
+const mymw = @import("mymiddleware");
+const hook = mymw.auth(zest.Context, &verifier, .{});
+try app.before(hook);
+```
+
+See [`docs/MIDDLEWARE.md`](docs/MIDDLEWARE.md) for the full duck-typing
+contract, execution order, and `comptime` closure patterns.
+
+### CORS Example
+
+```zig
+const zcors = @import("zcors");
+
+const cors_config = zcors.Config{
+    .origins = &.{"https://example.com"},
+    .methods = &.{"GET", "POST"},
+    .headers = &.{"Content-Type", "Authorization"},
+    .credentials = true,
+    .max_age = 86400,
+};
+
+try app.before(zcors.cors.beforeHook(zest.Context, cors_config));
+try app.after(zcors.cors.afterHook(zest.Context, cors_config));
+```
+
 ## Notes For Maintainers
 
 - `src/app.zig` owns the high-level application surface
@@ -100,10 +131,10 @@ For a fuller example with hooks and logging, see
 - `src/router.zig` owns route registration and path matching
 - `src/server.zig` owns the listening/accept loop
 - `src/middleware.zig` defines handler and hook contracts
+- `docs/MIDDLEWARE.md` defines the stable third-party middleware contract
 
-`zest` currently documents the API through source and examples rather than a
-stable external package contract. Keep README examples aligned with
-[`src/root.zig`](src/root.zig) and the tests when changing exported names.
+Keep README examples aligned with [`src/root.zig`](src/root.zig) and the
+tests when changing exported names.
 
 ## License
 

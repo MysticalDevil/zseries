@@ -43,7 +43,7 @@ pub const Server = struct {
     }
 
     pub fn listen(self: *Server, address: net.IpAddress) !void {
-        self.server_socket = try net.IpAddress.listen(&address, self.io, .{});
+        self.server_socket = try net.IpAddress.listen(&address, self.io, .{ .reuse_address = true });
         self.running.store(true, .seq_cst);
 
         std.log.info("zest server listening on {any}", .{address});
@@ -88,9 +88,9 @@ pub const Server = struct {
 
             try self.handleRequest(&request);
 
-            if (!request.head.keep_alive) {
-                return;
-            }
+            // Single-threaded server: close connection after each request
+            // to avoid blocking the accept loop on idle keep-alive connections.
+            return;
         }
     }
 
@@ -116,9 +116,28 @@ pub const Server = struct {
 
         if (match_result) |match| {
             self.middleware.execute(&ctx, match.route, match.route.handler) catch |err| {
-                std.log.err("request handler error: {any}", .{err});
-                ctx.status(500);
-                ctx.text(500, "Internal Server Error") catch {};
+                const already_responded = ctx.response_status != .ok or
+                    ctx.response_headers.count() > 0 or
+                    ctx.response_body.items.len > 0;
+                if (!already_responded) {
+                    std.log.err("request handler error: {any}", .{err});
+                    ctx.status(500);
+                    ctx.text(500, "Internal Server Error") catch {};
+                }
+            };
+        } else if (method == .OPTIONS) {
+            const noopHandler = struct {
+                fn h(_: *Context) !void {}
+            }.h;
+            self.middleware.execute(&ctx, null, noopHandler) catch |err| {
+                const already_responded = ctx.response_status != .ok or
+                    ctx.response_headers.count() > 0 or
+                    ctx.response_body.items.len > 0;
+                if (!already_responded) {
+                    std.log.err("request handler error: {any}", .{err});
+                    ctx.status(500);
+                    ctx.text(500, "Internal Server Error") catch {};
+                }
             };
         } else {
             ctx.status(404);

@@ -161,6 +161,6 @@ pub const Context = struct {
 
     pub fn bodyJson(self: *Context, comptime T: type) !?T {
         const body = self.request_body orelse return null;
-        return try std.json.parseFromSlice(T, self.allocator, body, .{});
+        return try std.json.parseFromSliceLeaky(T, self.allocator, body, .{});
     }
 };
