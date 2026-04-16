@@ -1,8 +1,13 @@
 const std = @import("std");
-const RuleContext = @import("root.zig").RuleContext;
-const Severity = @import("../diagnostic.zig").Severity;
+const RuleContext = root.RuleContext;
+const Severity = diagnostic.Severity;
 const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
+const root = @import("root.zig");
+const diagnostic = @import("../diagnostic.zig");
+const source_file = @import("../source_file.zig");
+const ignore_directives = @import("../ignore_directives.zig");
+const config = @import("../config.zig");
 
 const targeted_builtin_tags = [_]std.zig.Ast.Node.Tag{
     .builtin_call_two,
@@ -62,6 +67,7 @@ pub fn run(ctx: *RuleContext) !void {
 
         const info = buildChain(ast, node) orelse continue;
         if (info.len < 2 or info.allConstCast()) continue;
+        if (isLowRiskOpaqueContextBridge(ast, node, info)) continue;
 
         const loc = locations.getNodeLocation(ast, node, ctx.file.content);
         const message = try formatMessage(ctx.allocator, info);
@@ -146,7 +152,7 @@ fn isLowRiskOpaqueContextBridge(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, 
         const inner_node = firstArg(ast, node) orelse return false;
         const source = firstArg(ast, inner_node) orelse return false;
         return switch (ast.nodeTag(source)) {
-            .identifier, .field_access => true,
+            .identifier, .field_access, .address_of => true,
             else => false,
         };
     }
@@ -154,7 +160,10 @@ fn isLowRiskOpaqueContextBridge(ast: std.zig.Ast, node: std.zig.Ast.Node.Index, 
     if (outer == .ptrCast and inner == .constCast) {
         const inner_node = firstArg(ast, node) orelse return false;
         const source = firstArg(ast, inner_node) orelse return false;
-        return ast.nodeTag(source) == .address_of;
+        return switch (ast.nodeTag(source)) {
+            .address_of, .identifier, .field_access => true,
+            else => false,
+        };
     }
 
     return false;
@@ -186,10 +195,10 @@ fn expectRuleHitsWithAllocator(
     var ast = try std.zig.Ast.parse(allocator, content, .zig);
     defer ast.deinit(allocator);
 
-    const SourceFile = @import("../source_file.zig").SourceFile;
-    const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
-    const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
-    const Config = @import("../config.zig").Config;
+    const SourceFile = source_file.SourceFile;
+    const IgnoreDirectives = ignore_directives.IgnoreDirectives;
+    const DiagnosticCollection = diagnostic.DiagnosticCollection;
+    const Config = config.Config;
 
     var file = SourceFile{
         .allocator = allocator,

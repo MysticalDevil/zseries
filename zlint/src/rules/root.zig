@@ -1,10 +1,10 @@
 const std = @import("std");
 const cli = @import("../cli.zig");
-const SourceFile = @import("../source_file.zig").SourceFile;
-const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
-const Severity = @import("../diagnostic.zig").Severity;
-const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
-const Config = @import("../config.zig").Config;
+const SourceFile = source_file.SourceFile;
+const DiagnosticCollection = diagnostic.DiagnosticCollection;
+const Severity = diagnostic.Severity;
+const IgnoreDirectives = ignore_directives.IgnoreDirectives;
+const Config = config_zig.Config;
 const rule_ids = @import("../rule_ids.zig");
 
 // Import all rule modules
@@ -23,6 +23,11 @@ const no_do_not_optimize_away = @import("no_do_not_optimize_away.zig");
 const duplicated_code = @import("duplicated_code.zig");
 const discard_assignment = @import("discard_assignment.zig");
 const no_anytype_io_params = @import("no_anytype_io_params.zig");
+const source_file = @import("../source_file.zig");
+const diagnostic = @import("../diagnostic.zig");
+const ignore_directives = @import("../ignore_directives.zig");
+const config_zig = @import("../config.zig");
+const locations = @import("../ast/locations.zig");
 
 // Public utilities for rule authors
 pub const utils = @import("utils.zig");
@@ -80,7 +85,7 @@ pub const RuleContext = struct {
 
         const ast = self.file.ast;
         const tag = ast.nodeTag(node);
-        const loc = @import("../ast/locations.zig").getNodeLocation(ast, node, self.file.content);
+        const loc = locations.getNodeLocation(ast, node, self.file.content);
         try self.trace(
             level,
             "AST {s}: rule='{s}' node={d} tag={s} at {s}:{d}:{d}",

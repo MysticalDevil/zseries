@@ -1,8 +1,14 @@
 const std = @import("std");
-const RuleContext = @import("root.zig").RuleContext;
-const Severity = @import("../diagnostic.zig").Severity;
-const AstUtils = @import("utils.zig").AstUtils;
+const RuleContext = root.RuleContext;
+const Severity = diagnostic.Severity;
+const AstUtils = utils.AstUtils;
 const rule_ids = @import("../rule_ids.zig");
+const root = @import("root.zig");
+const diagnostic = @import("../diagnostic.zig");
+const utils = @import("utils.zig");
+const source_file = @import("../source_file.zig");
+const ignore_directives = @import("../ignore_directives.zig");
+const config = @import("../config.zig");
 
 /// ZAI005: Detect catch unreachable patterns
 pub fn run(ctx: *RuleContext) !void {
@@ -40,10 +46,10 @@ fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8,
     var ast = try std.zig.Ast.parse(allocator, content, .zig);
     defer ast.deinit(allocator);
 
-    const SourceFile = @import("../source_file.zig").SourceFile;
-    const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
-    const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
-    const Config = @import("../config.zig").Config;
+    const SourceFile = source_file.SourceFile;
+    const IgnoreDirectives = ignore_directives.IgnoreDirectives;
+    const DiagnosticCollection = diagnostic.DiagnosticCollection;
+    const Config = config.Config;
 
     var file = SourceFile{
         .allocator = allocator,

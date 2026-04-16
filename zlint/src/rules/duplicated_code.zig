@@ -1,11 +1,16 @@
 const std = @import("std");
-const RuleContext = @import("root.zig").RuleContext;
-const Severity = @import("../diagnostic.zig").Severity;
+const RuleContext = root.RuleContext;
+const Severity = diagnostic.Severity;
 const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
+const root = @import("root.zig");
+const diagnostic = @import("../diagnostic.zig");
+const source_file = @import("../source_file.zig");
+const ignore_directives = @import("../ignore_directives.zig");
+const config_zig = @import("../config.zig");
 
 const feature_bins = 64;
-const min_similarity_default = 0.96;
+const min_similarity_default = 0.995;
 const min_tokens_default: usize = 40;
 const max_reports_default: usize = 12;
 const min_fuzzy_lines_default: usize = 20;
@@ -577,8 +582,8 @@ test "duplicated_code downgrades rule skeleton duplicates to help" {
 }
 
 const RunResult = struct {
-    diags: @import("../diagnostic.zig").DiagnosticCollection,
-    summary: @import("../diagnostic.zig").Summary,
+    diags: diagnostic.DiagnosticCollection,
+    summary: diagnostic.Summary,
 };
 
 fn runRuleOnSource(allocator: std.mem.Allocator, source: []const u8) !RunResult {
@@ -588,10 +593,10 @@ fn runRuleOnSource(allocator: std.mem.Allocator, source: []const u8) !RunResult 
     var ast = try std.zig.Ast.parse(allocator, content, .zig);
     defer ast.deinit(allocator);
 
-    const SourceFile = @import("../source_file.zig").SourceFile;
-    const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
-    const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
-    const Config = @import("../config.zig").Config;
+    const SourceFile = source_file.SourceFile;
+    const IgnoreDirectives = ignore_directives.IgnoreDirectives;
+    const DiagnosticCollection = diagnostic.DiagnosticCollection;
+    const Config = config_zig.Config;
 
     var file = SourceFile{
         .allocator = allocator,

@@ -1,8 +1,13 @@
 const std = @import("std");
-const RuleContext = @import("root.zig").RuleContext;
-const Severity = @import("../diagnostic.zig").Severity;
+const RuleContext = root.RuleContext;
+const Severity = diagnostic.Severity;
 const locations = @import("../ast/locations.zig");
 const rule_ids = @import("../rule_ids.zig");
+const root = @import("root.zig");
+const diagnostic = @import("../diagnostic.zig");
+const source_file = @import("../source_file.zig");
+const ignore_directives = @import("../ignore_directives.zig");
+const config_zig = @import("../config.zig");
 
 pub fn run(ctx: *RuleContext) !void {
     if (ctx.shouldSkipFile()) return;
@@ -54,6 +59,7 @@ fn checkFallbackBranch(ctx: *RuleContext, node: std.zig.Ast.Node.Index, severity
 
     if (rhs_tag == .block or rhs_tag == .block_semicolon or rhs_tag == .block_two or rhs_tag == .block_two_semicolon) {
         if (isEmptyBlock(ast, rhs, ctx.file.content)) {
+            if (isInsideCatchBlock(ast, node)) return;
             const loc = locations.getNodeLocation(ast, node, ctx.file.content);
             try ctx.addDiagnostic(
                 rule_ids.no_silent_error_handling,
@@ -130,6 +136,22 @@ fn isEmptyBlock(ast: std.zig.Ast, block: std.zig.Ast.Node.Index, source: []const
     }
 
     return true;
+}
+
+fn isInsideCatchBlock(ast: std.zig.Ast, node: std.zig.Ast.Node.Index) bool {
+    const node_first = ast.firstToken(node);
+    const node_last = ast.lastToken(node);
+    const tags = ast.nodes.items(.tag);
+
+    for (tags, 0..) |tag, i| {
+        if (tag != .@"catch") continue;
+        const catch_node: std.zig.Ast.Node.Index = @enumFromInt(i);
+        if (catch_node == node) continue;
+        const catch_first = ast.firstToken(catch_node);
+        const catch_last = ast.lastToken(catch_node);
+        if (catch_first <= node_first and node_last <= catch_last) return true;
+    }
+    return false;
 }
 
 fn checkEmptySwitchElseByAst(ctx: *RuleContext, severity: Severity) !void {
@@ -244,6 +266,20 @@ test "detects catch break" {
     try expectRuleHitsWithAllocator(std.testing.allocator, source, 1);
 }
 
+test "allows empty catch inside another catch block" {
+    const source =
+        \\fn foo() anyerror!void {}
+        \\fn bar() anyerror!void {}
+        \\fn demo() void {
+        \\    try foo() catch |err| {
+        \\        std.log.err(\"{}\", .{err});
+        \\        try bar() catch {};
+        \\    };
+        \\}
+    ;
+    try expectRuleHitsWithAllocator(std.testing.allocator, source, 0);
+}
+
 fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8, expected: usize) !void {
     const content = try allocator.dupeZ(u8, source);
     defer allocator.free(content);
@@ -251,10 +287,10 @@ fn expectRuleHitsWithAllocator(allocator: std.mem.Allocator, source: []const u8,
     var ast = try std.zig.Ast.parse(allocator, content, .zig);
     defer ast.deinit(allocator);
 
-    const SourceFile = @import("../source_file.zig").SourceFile;
-    const IgnoreDirectives = @import("../ignore_directives.zig").IgnoreDirectives;
-    const DiagnosticCollection = @import("../diagnostic.zig").DiagnosticCollection;
-    const Config = @import("../config.zig").Config;
+    const SourceFile = source_file.SourceFile;
+    const IgnoreDirectives = ignore_directives.IgnoreDirectives;
+    const DiagnosticCollection = diagnostic.DiagnosticCollection;
+    const Config = config_zig.Config;
 
     var file = SourceFile{
         .allocator = allocator,

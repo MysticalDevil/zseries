@@ -58,6 +58,11 @@ pub const SourceFile = struct {
             "tests.zig",
         };
 
+        const prefix_patterns = [_][]const u8{
+            "test_",
+            "mock_",
+        };
+
         for (suffix_patterns) |pattern| {
             if (std.mem.endsWith(u8, path, pattern)) return true;
         }
@@ -68,6 +73,10 @@ pub const SourceFile = struct {
 
         for (equals_patterns) |pattern| {
             if (std.mem.eql(u8, basename, pattern)) return true;
+        }
+
+        for (prefix_patterns) |pattern| {
+            if (std.mem.startsWith(u8, basename, pattern)) return true;
         }
 
         return false;
