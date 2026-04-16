@@ -1,3 +1,4 @@
-pub const promptLine = @import("zcli").input.promptLine;
-pub const promptPassword = @import("zcli").input.promptPassword;
-pub const chooseIndex = @import("zcli").input.chooseIndex;
+const zcli = @import("zcli");
+pub const promptLine = zcli.input.promptLine;
+pub const promptPassword = zcli.input.promptPassword;
+pub const chooseIndex = zcli.input.chooseIndex;

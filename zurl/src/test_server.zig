@@ -98,18 +98,20 @@ pub fn main(init: std.process.Init) !void {
     var app = try zest.App.init(allocator, init.io);
     defer app.deinit();
 
-    try app.get("/health", healthHandler);
-    try app.post("/session/login", loginHandler);
-    try app.post("/session/logout", logoutHandler);
-    try app.get("/session/me", meHandler);
-    try app.post("/items", createItemHandler);
-    try app.get("/items", listItemsHandler);
-    try app.get("/items/:id", getItemHandler);
-    try app.patch("/items/:id", updateItemHandler);
-    try app.delete("/items/:id", deleteItemHandler);
-    try app.post("/echo", echoHandler);
-    try app.get("/redirect", redirectHandler);
-    try app.get("/redirect-target", redirectTargetHandler);
+    const health_builder = try app.get("/health", healthHandler);
+    _ = health_builder;
+    const login_builder = try app.post("/session/login", loginHandler);
+    _ = login_builder;
+    _ = try app.post("/session/logout", logoutHandler);
+    _ = try app.get("/session/me", meHandler);
+    _ = try app.post("/items", createItemHandler);
+    _ = try app.get("/items", listItemsHandler);
+    _ = try app.get("/items/:id", getItemHandler);
+    _ = try app.patch("/items/:id", updateItemHandler);
+    _ = try app.delete("/items/:id", deleteItemHandler);
+    _ = try app.post("/echo", echoHandler);
+    _ = try app.get("/redirect", redirectHandler);
+    _ = try app.get("/redirect-target", redirectTargetHandler);
 
     try app.listen(.{ .ip4 = std.Io.net.Ip4Address.loopback(port) });
 }

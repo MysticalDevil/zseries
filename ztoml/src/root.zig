@@ -1,20 +1,24 @@
 const std = @import("std");
+const errors = @import("error.zig");
+const lexer = @import("lexer.zig");
+const value_zig = @import("value.zig");
+const parser = @import("parser.zig");
 
-pub const Error = @import("error.zig").Error;
-pub const ErrorSet = @import("error.zig").ErrorSet;
-pub const makeError = @import("error.zig").makeError;
-pub const makeParseError = @import("error.zig").makeParseError;
+pub const Error = errors.Error;
+pub const ErrorSet = errors.ErrorSet;
+pub const makeError = errors.makeError;
+pub const makeParseError = errors.makeParseError;
 
-pub const Token = @import("lexer.zig").Token;
-pub const TokenType = @import("lexer.zig").TokenType;
-pub const Lexer = @import("lexer.zig").Lexer;
-pub const tokenize = @import("lexer.zig").tokenize;
+pub const Token = lexer.Token;
+pub const TokenType = lexer.TokenType;
+pub const Lexer = lexer.Lexer;
+pub const tokenize = lexer.tokenize;
 
-pub const Value = @import("value.zig").Value;
+pub const Value = value_zig.Value;
 pub const DatetimeValue = Value.DatetimeValue;
 
-pub const parse = @import("parser.zig").parse;
-pub const parseFile = @import("parser.zig").parseFile;
+pub const parse = parser.parse;
+pub const parseFile = parser.parseFile;
 
 /// Parse TOML source string into a Value
 pub fn parseString(allocator: std.mem.Allocator, source: []const u8) ErrorSet!Value {

@@ -30,6 +30,25 @@ conventions: `CamelCase` for types, `lowerCamelCase` for functions and locals,
 and small, explicit modules under `src/`. Markdown should pass `rumdl fmt` and
 `rumdl check`.
 
+### Import Style
+
+- Avoid chaining `@import("xxx").yyy` when a file has **3 or more** such
+  accesses. Instead, introduce a module alias:
+  ```zig
+  const xxx = @import("xxx");
+  const yyy = xxx.yyy;
+  ```
+- Use the module name or a well-understood abbreviation as the alias
+  (e.g. `const mw = @import("middleware.zig");`). Avoid the `_mod` suffix
+  unless the bare name would conflict with a keyword or an existing identifier.
+- Single or double `@import("xxx").yyy` usages may stay inline.
+- Avoid discarding meaningful return values with `_ = try xxx;`. If a value
+  must be ignored, prefer giving it a named binding (e.g.
+  `const builder = try app.get(...); _ = builder;`).
+  **Exception:** inside `test` blocks, test files (e.g. `tests/*.zig`), and
+  test-only directories, ignoring return values or using bare `try` without
+  error handling is acceptable.
+
 ## Testing Guidelines
 
 Prefer adding or updating targeted package tests before broad refactors. Run

@@ -1,10 +1,15 @@
 const std = @import("std");
-const Algorithm = @import("algorithm.zig").Algorithm;
-const Claims = @import("claims.zig").Claims;
-const Header = @import("token.zig").Header;
-const Key = @import("key.zig").Key;
-const base64UrlDecode = @import("token.zig").base64UrlDecode;
-const Encoder = @import("encoder.zig").Encoder;
+const algorithm_zig = @import("algorithm.zig");
+const claims_zig = @import("claims.zig");
+const token_zig = @import("token.zig");
+const key_zig = @import("key.zig");
+const encoder_zig = @import("encoder.zig");
+const Algorithm = algorithm_zig.Algorithm;
+const Claims = claims_zig.Claims;
+const Header = token_zig.Header;
+const Key = key_zig.Key;
+const base64UrlDecode = token_zig.base64UrlDecode;
+const Encoder = encoder_zig.Encoder;
 
 pub const Verifier = struct {
     allocator: std.mem.Allocator,

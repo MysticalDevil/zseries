@@ -1,7 +1,10 @@
 const std = @import("std");
-const CreateOptions = @import("options.zig").CreateOptions;
-const TempDir = @import("temp_dir.zig").TempDir;
-const NamedTempFile = @import("named_temp_file.zig").NamedTempFile;
+const opts = @import("options.zig");
+const temp_dir = @import("temp_dir.zig");
+const named_temp_file = @import("named_temp_file.zig");
+const CreateOptions = opts.CreateOptions;
+const TempDir = temp_dir.TempDir;
+const NamedTempFile = named_temp_file.NamedTempFile;
 
 pub const Builder = struct {
     options: CreateOptions = .{},

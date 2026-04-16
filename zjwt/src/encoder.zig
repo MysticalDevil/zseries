@@ -1,10 +1,14 @@
 const std = @import("std");
-const Algorithm = @import("algorithm.zig").Algorithm;
-const Claims = @import("claims.zig").Claims;
-const Header = @import("token.zig").Header;
-const Token = @import("token.zig").Token;
-const Key = @import("key.zig").Key;
-const base64UrlEncode = @import("token.zig").base64UrlEncode;
+const algorithm_zig = @import("algorithm.zig");
+const claims_zig = @import("claims.zig");
+const token_zig = @import("token.zig");
+const key_zig = @import("key.zig");
+const Algorithm = algorithm_zig.Algorithm;
+const Claims = claims_zig.Claims;
+const Header = token_zig.Header;
+const Token = token_zig.Token;
+const Key = key_zig.Key;
+const base64UrlEncode = token_zig.base64UrlEncode;
 
 pub const Encoder = struct {
     allocator: std.mem.Allocator,

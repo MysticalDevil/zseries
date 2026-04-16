@@ -1,7 +1,9 @@
 const std = @import("std");
-const Verifier = @import("verifier.zig").Verifier;
-const VerifiedToken = @import("verifier.zig").VerifiedToken;
-const Claims = @import("claims.zig").Claims;
+const verifier_zig = @import("verifier.zig");
+const claims = @import("claims.zig");
+const Verifier = verifier_zig.Verifier;
+const VerifiedToken = verifier_zig.VerifiedToken;
+const Claims = claims.Claims;
 
 pub const MiddlewareConfig = struct {
     token_source: TokenSource = .both,

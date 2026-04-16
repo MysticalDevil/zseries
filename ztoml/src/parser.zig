@@ -1,12 +1,15 @@
 const std = @import("std");
-const Lexer = @import("lexer.zig").Lexer;
-const Token = @import("lexer.zig").Token;
-const TokenType = @import("lexer.zig").TokenType;
-const Value = @import("value.zig").Value;
-const ErrorSet = @import("error.zig").ErrorSet;
-const Error = @import("error.zig").Error;
-const makeError = @import("error.zig").makeError;
-const makeParseError = @import("error.zig").makeParseError;
+const lexer_zig = @import("lexer.zig");
+const value_zig = @import("value.zig");
+const errors = @import("error.zig");
+const Lexer = lexer_zig.Lexer;
+const Token = lexer_zig.Token;
+const TokenType = lexer_zig.TokenType;
+const Value = value_zig.Value;
+const ErrorSet = errors.ErrorSet;
+const Error = errors.Error;
+const makeError = errors.makeError;
+const makeParseError = errors.makeParseError;
 
 /// Parser state
 const Parser = struct {

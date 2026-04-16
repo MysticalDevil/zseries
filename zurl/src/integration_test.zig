@@ -210,18 +210,20 @@ fn startServer(allocator: std.mem.Allocator) !*RunningServer {
     errdefer app.deinit();
     server.app = app;
 
-    try app.get("/health", test_server.healthHandler);
-    try app.post("/session/login", test_server.loginHandler);
-    try app.post("/session/logout", test_server.logoutHandler);
-    try app.get("/session/me", test_server.meHandler);
-    try app.post("/items", test_server.createItemHandler);
-    try app.get("/items", test_server.listItemsHandler);
-    try app.get("/items/:id", test_server.getItemHandler);
-    try app.patch("/items/:id", test_server.updateItemHandler);
-    try app.delete("/items/:id", test_server.deleteItemHandler);
-    try app.post("/echo", test_server.echoHandler);
-    try app.get("/redirect", test_server.redirectHandler);
-    try app.get("/redirect-target", test_server.redirectTargetHandler);
+    const health_builder = try app.get("/health", test_server.healthHandler);
+    _ = health_builder;
+    const login_builder = try app.post("/session/login", test_server.loginHandler);
+    _ = login_builder;
+    _ = try app.post("/session/logout", test_server.logoutHandler);
+    _ = try app.get("/session/me", test_server.meHandler);
+    _ = try app.post("/items", test_server.createItemHandler);
+    _ = try app.get("/items", test_server.listItemsHandler);
+    _ = try app.get("/items/:id", test_server.getItemHandler);
+    _ = try app.patch("/items/:id", test_server.updateItemHandler);
+    _ = try app.delete("/items/:id", test_server.deleteItemHandler);
+    _ = try app.post("/echo", test_server.echoHandler);
+    _ = try app.get("/redirect", test_server.redirectHandler);
+    _ = try app.get("/redirect-target", test_server.redirectTargetHandler);
 
     test_server.resetState(allocator);
 
